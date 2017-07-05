@@ -80,7 +80,8 @@ public:
     //map<int, pair <int, Vector3f > > Ground;
     vector<GroundPoint> Grounds;
 	//new variable wrz
-	GroundPoint* groundPointFixedWithCamera;
+	GroundPoint* arrowBasePointInGround;
+	GroundPoint* arrowBasePointInGroundNext;
 	
 	float inPlanePointRate=0;
     
@@ -125,12 +126,18 @@ public:
     void computeAR(vector<Vector3f> &point_cloud, Vector3f &model);
     
     void drawAR(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update);
+	//wrz
 	void drawArrowAR(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update);
 	void drawFixedArrowWithCameraAR(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update);
+	void drawArrowTowardFixedPointAR(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update);
+
     void drawGround(cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest);
     void drawBox(cv::Mat &result, Vector3f corner_0, Vector3f corner_x, Vector3f corner_y, Vector3f corner_z, float size, Vector3f P_latest, Matrix3f R_latest, bool inAR);
-	//draw arrow wrz
+	//draw arrow with num 3 wrz
 	void drawArrow(cv::Mat &result, Vector3f corner_0, Vector3f corner_x, Vector3f corner_y, float size, Vector3f P_latest, Matrix3f R_latest, bool inAR);
+	//draw arrow according to the input num
+	void drawAnyArrow(cv::Mat &result, Vector3f corner_0, Vector3f corner_x, Vector3f corner_y, int singleArrowNum, Vector3f P_latest, Matrix3f R_latest, bool inAR);
+	
     void Reprojection(cv::Mat &result, vector<Vector3f> &point_cloud, const Matrix3f *R_window,const Vector3f *T_window, bool box_in_trajectory);
     vector<Vector3f> calculate_camera_pose(Vector3f camera_center, Matrix3f Rc, float length);
     cv::Point2f World2VirturCam(Eigen::Vector3f xyz, float &depth);

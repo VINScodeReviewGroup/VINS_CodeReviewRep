@@ -508,7 +508,9 @@ bool vins_updated = false;
                     vins.drawresult.startInit = true;
                     //vins.drawresult.drawAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
 					//vins.drawresult.drawArrowAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
-					vins.drawresult.drawFixedArrowWithCameraAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
+					//vins.drawresult.drawFixedArrowWithCameraAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
+					vins.drawresult.drawArrowTowardFixedPointAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
+					
                     vins_updated = false;
                     
                     cv::cvtColor(image, tmp, CV_RGBA2BGR);

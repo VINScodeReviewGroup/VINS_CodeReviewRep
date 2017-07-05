@@ -37,7 +37,8 @@ DrawResult::DrawResult(float _pitch, float _roll, float _yaw, float _Tx, float _
     indexs.push_back(0);
     look_down = false;
     Ground_idx=0;
-	groundPointFixedWithCamera=new GroundPoint(-1,Vector3f(0,0,0));
+	arrowBasePointInGround=new GroundPoint(-1,Vector3f(0,0,0));
+	arrowBasePointInGroundNext=new GroundPoint(-1,Vector3f(0,0,0));
 }
 bool checkBorder(const cv::Point2f &pt)
 {
@@ -551,6 +552,7 @@ void DrawResult::drawArrow(cv::Mat &result, Vector3f corner_0, Vector3f corner_x
 			return;
 		
 		cv::Point2f pts;
+		
 		if (inAR)
 		{
 			pts.x = FOCUS_LENGTH_X * Pc.x() / Pc.z()+ 240;
@@ -642,6 +644,101 @@ void DrawResult::drawArrow(cv::Mat &result, Vector3f corner_0, Vector3f corner_x
 
 }
 
+void DrawResult::drawAnyArrow(cv::Mat &result, Vector3f corner_0, Vector3f corner_x, Vector3f corner_y, int singleArrowNum, Vector3f P_latest, Matrix3f R_latest, bool inAR){
+	if(singleArrowNum<=0)return;
+	Eigen::Matrix3f RIC;
+	RIC = Utility::ypr2R(Vector3d(RIC_y,RIC_p,RIC_r)).cast<float>();
+	
+	//第一个单个箭头
+	float arrowWidthRate = 0.25;
+	vector<Vector3f> arrowConers;
+	Vector3f corner_x1 = corner_x;
+	Vector3f corner_y1 = corner_y;
+	Vector3f corner_z1 = corner_x1 + corner_y1 - corner_0;
+	Vector3f corner_xx1 = (corner_y1 - corner_x1) * arrowWidthRate + corner_x1;
+	Vector3f corner_yy1 = (corner_x1 - corner_y1) * arrowWidthRate + corner_y1;
+	Vector3f corner_zz1 = (corner_0 - corner_z1) * arrowWidthRate + corner_z1;
+	
+	arrowConers.push_back(corner_x1);
+	arrowConers.push_back(corner_z1);
+	arrowConers.push_back(corner_y1);
+	arrowConers.push_back(corner_yy1);
+	arrowConers.push_back(corner_zz1);
+	arrowConers.push_back(corner_xx1);
+	
+	//每个单个箭头间的距离
+	float singleArrowDis_rate = 1;
+	Vector3f singleArrowDis = (corner_z1 - (corner_x1+corner_y1)/2) * singleArrowDis_rate;
+	//计算其余箭头的位置
+	for(int i=1;i<singleArrowNum;++i){
+		Vector3f corner_xi=arrowConers[(6*(i-1))]+singleArrowDis;
+		Vector3f corner_zi=arrowConers[6*(i-1)+1]+singleArrowDis;
+		Vector3f corner_yi=arrowConers[6*(i-1)+2]+singleArrowDis;
+		Vector3f corner_yyi=arrowConers[6*(i-1)+3]+singleArrowDis;
+		Vector3f corner_zzi=arrowConers[6*(i-1)+4]+singleArrowDis;
+		Vector3f corner_xxi=arrowConers[6*(i-1)+5]+singleArrowDis;
+		arrowConers.push_back(corner_xi);
+		arrowConers.push_back(corner_zi);
+		arrowConers.push_back(corner_yi);
+		arrowConers.push_back(corner_yyi);
+		arrowConers.push_back(corner_zzi);
+		arrowConers.push_back(corner_xxi);
+										
+	}
+	//所有箭头在图像投影的位置
+	vector<cv::Point2f> arrowImage;
+	Eigen::Vector3f Pc;
+	vector<float> depth_of_coner;
+	for(auto it : arrowConers)
+	{
+		if (inAR)
+			Pc = (R_latest * RIC).transpose()* (it - 1.0*P_latest  - R_latest * Vector3f(0,0.043,0));
+		else
+			Pc = R_latest.transpose() * (it - origin_w - P_latest);
+		
+		if(Pc.z()<0)
+			return;
+		
+		cv::Point2f pts;
+		if (inAR)
+		{
+			pts.x = FOCUS_LENGTH_X * Pc.x() / Pc.z()+ 240;
+			pts.y = FOCUS_LENGTH_Y * Pc.y() / Pc.z()+ 320;
+		}
+		else{
+			pts.x = Fx * Pc.x() / Pc.z()+ Y0;
+			pts.y = Fy * Pc.y() / Pc.z()+ X0;
+		}
+		depth_of_coner.push_back(Pc.norm());
+		arrowImage.push_back(pts);
+	}
+	if(Pc.z()<0)
+		return;
+	
+	cv::Point* p = new cv::Point[6*singleArrowNum];
+	for(int i=0;i<6*singleArrowNum;++i){
+		p[i]=arrowImage[i];
+	}
+	//绘制箭头，每个箭头分为左右两部分，依次画出
+	int npts[1] = {4};
+	cv::Point plain[1][4];
+	const cv::Point* ppt[1] = {plain[0]};
+	
+	for(int i=0;i<singleArrowNum;++i){
+		plain[0][0] = p[0+6*i];
+		plain[0][1] = p[1+6*i];
+		plain[0][2] = p[4+6*i];
+		plain[0][3] = p[5+6*i];
+		cv::fillPoly(result, ppt, npts, 1, cv::Scalar(0, 200, 0));
+		
+		plain[0][0] = p[1+6*i];
+		plain[0][1] = p[2+6*i];
+		plain[0][2] = p[3+6*i];
+		plain[0][3] = p[4+6*i];
+		cv::fillPoly(result, ppt, npts, 1, cv::Scalar(0, 200, 0));
+	}
+	
+}
 
 void DrawResult::drawAR(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update)
 {
@@ -1136,28 +1233,31 @@ void DrawResult::drawFixedArrowWithCameraAR(cv:: Mat &equ_image, cv::Mat &result
 		drawGround(result, point_inlier, P_latest, R_latest);
 	
 	//更新arrow位置
-	if(groundPointFixedWithCamera->idx!=-1){
+	if(arrowBasePointInGround->idx!=-1){
+		//计算相机光心在ground平面垂直投影点的坐标
 		Vector3f cameraInGround;
 		float length_diretion;
-		Vector3f plane_normal(groundPointFixedWithCamera->initPlane[0], groundPointFixedWithCamera->initPlane[1], groundPointFixedWithCamera->initPlane[2]);
-		length_diretion=(plane_normal.dot(P_latest) + groundPointFixedWithCamera->initPlane[3]) / (plane_normal.norm());
+		Vector3f plane_normal(arrowBasePointInGround->initPlane[0], arrowBasePointInGround->initPlane[1], arrowBasePointInGround->initPlane[2]);
+		length_diretion=(plane_normal.dot(P_latest) + arrowBasePointInGround->initPlane[3]) / (plane_normal.norm());
 		cameraInGround=P_latest-length_diretion*plane_normal/(plane_normal.norm());
-		float dis=abs((plane_normal.dot(cameraInGround) + groundPointFixedWithCamera->initPlane[3]) / (plane_normal.norm()));
+		float dis=abs((plane_normal.dot(cameraInGround) + arrowBasePointInGround->initPlane[3]) / (plane_normal.norm()));
 		printf("disCameraInGround:%f, length:%f\n",dis,length_diretion);
 		
+		//计算相机的principal axis在ground平面的投影向量
 		Matrix3f RWC;
 		RWC=R_latest*RIC;
 		Vector3f imgCenter,imgCenterInGround;
 		Vector3f principalAxis(0,0,1);
 		imgCenter=RWC*principalAxis+P_latest;
-		length_diretion=(plane_normal.dot(imgCenter) + groundPointFixedWithCamera->initPlane[3]) / (plane_normal.norm());
+		length_diretion=(plane_normal.dot(imgCenter) + arrowBasePointInGround->initPlane[3]) / (plane_normal.norm());
 		imgCenterInGround=imgCenter-length_diretion*plane_normal/(plane_normal.norm());
-		dis=abs((plane_normal.dot(imgCenterInGround) + groundPointFixedWithCamera->initPlane[3]) / (plane_normal.norm()));
+		dis=abs((plane_normal.dot(imgCenterInGround) + arrowBasePointInGround->initPlane[3]) / (plane_normal.norm()));
 		printf("disImgCenterInGround:%f, length:%f\n",dis,length_diretion);
 		
 		Vector3f arrowDiretInGround=(imgCenterInGround-cameraInGround);
 		arrowDiretInGround=arrowDiretInGround/arrowDiretInGround.norm();
 		
+		//箭头固定在主轴投影在ground平面的矢量方向上，距离光心投影点一定的距离disArrowAndCamera；arrow的大小由lengthc描述
 		float disArrowAndCamera=1.0;
 		Vector3f ori, cox, coy, coz;
 		ori=cameraInGround+disArrowAndCamera*arrowDiretInGround;
@@ -1174,21 +1274,21 @@ void DrawResult::drawFixedArrowWithCameraAR(cv:: Mat &equ_image, cv::Mat &result
 		coy=ori+lengthc*yDirec;
 		coz=ori+lengthc*zDirec;
 		
-		groundPointFixedWithCamera->ori=ori;
-		groundPointFixedWithCamera->cox=cox;
-		groundPointFixedWithCamera->coy=coy;
-		groundPointFixedWithCamera->coz=coz;
-		groundPointFixedWithCamera->size=lengthc;
-		groundPointFixedWithCamera->lix=xDirec;
-		groundPointFixedWithCamera->liy=yDirec;
-		groundPointFixedWithCamera->liz=zDirec;
+		arrowBasePointInGround->ori=ori;
+		arrowBasePointInGround->cox=cox;
+		arrowBasePointInGround->coy=coy;
+		arrowBasePointInGround->coz=coz;
+		arrowBasePointInGround->size=lengthc;
+		arrowBasePointInGround->lix=xDirec;
+		arrowBasePointInGround->liy=yDirec;
+		arrowBasePointInGround->liz=zDirec;
 		
 		
 	}
 	
 	//绘制已有的箭头
-	if(groundPointFixedWithCamera->idx!=-1)
-		drawArrow(result, groundPointFixedWithCamera->ori, groundPointFixedWithCamera->cox, groundPointFixedWithCamera->coy, groundPointFixedWithCamera->size, P_latest, R_latest, true);
+	if(arrowBasePointInGround->idx!=-1)
+		drawArrow(result, arrowBasePointInGround->ori, arrowBasePointInGround->cox, arrowBasePointInGround->coy, arrowBasePointInGround->size, P_latest, R_latest, true);
 	
 	
 	
@@ -1211,18 +1311,18 @@ void DrawResult::drawFixedArrowWithCameraAR(cv:: Mat &equ_image, cv::Mat &result
 		if ( (box_center_xy - center_input).norm()<150)
 		{
 			
-			if(groundPointFixedWithCamera->idx==-1){
-				groundPointFixedWithCamera->idx = 0;
-				groundPointFixedWithCamera->boxflag = true;
-				groundPointFixedWithCamera->moveflag = true;
-				groundPointFixedWithCamera->initPlane = findPlane(point_inlier);
+			if(arrowBasePointInGround->idx==-1){
+				arrowBasePointInGround->idx = 0;
+				arrowBasePointInGround->boxflag = true;
+				arrowBasePointInGround->moveflag = true;
+				arrowBasePointInGround->initPlane = findPlane(point_inlier);
 
 			}
 			else{
 				float inPlanePointRateLast=inPlanePointRate;
 				Vector4f initPlaneTmp=findPlane(point_inlier);
 				if(inPlanePointRateLast<inPlanePointRate){
-					groundPointFixedWithCamera->initPlane = initPlaneTmp;
+					arrowBasePointInGround->initPlane = initPlaneTmp;
 					printf("inPlanePointRateLast:%f\n",inPlanePointRateLast);
 				}
 			}
@@ -1232,6 +1332,199 @@ void DrawResult::drawFixedArrowWithCameraAR(cv:: Mat &equ_image, cv::Mat &result
 		tapFlag = false;
 	}
 }
+
+void DrawResult::drawArrowTowardFixedPointAR(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update)
+{
+	cv::Mat aa(HEIGHT,WIDTH,CV_8UC3,Scalar(0,0,0));
+	result = aa;
+	Eigen::Matrix3f RIC;
+	RIC = Utility::ypr2R(Vector3d(RIC_y,RIC_p,RIC_r)).cast<float>();
+	
+	//计算透镜到像平面方向与惯性系中的z方向的夹角，夹角小于60度，则认为相机朝下俯视
+	Vector3f cam_z(0, 0, -1);
+	Vector3f w_cam_z = R_latest * RIC * cam_z;
+	if (acos(w_cam_z.dot(Vector3f(0, 0, 1))) * 180.0 / M_PI < 60)
+	{
+		printf("look down\n");
+		look_down = true;
+	}
+	else
+	{
+		printf("not down\n");
+		look_down = false;
+	}
+	
+	Vector3f groundPlanePoint;
+	vector<Vector3f> point_inlier;
+	groundPlanePoint = findGround(point_cloud, point_inlier);
+	printf("Ground inlier size %d\n", int(point_inlier.size()) );
+	
+	
+	///draw ground area
+	//gound点集数目必须大于28才绘制地面网格
+	if (point_inlier.size()>28)
+		drawGround(result, point_inlier, P_latest, R_latest);
+	
+	
+	
+	//更新arrow位置
+	if(arrowBasePointInGround->idx!=-1){
+		//计算相机光心在ground平面垂直投影点的坐标
+		Vector3f cameraInGround;
+		float length_diretion;
+		Vector3f plane_normal(arrowBasePointInGround->initPlane[0], arrowBasePointInGround->initPlane[1], arrowBasePointInGround->initPlane[2]);
+		length_diretion=(plane_normal.dot(P_latest) + arrowBasePointInGround->initPlane[3]) / (plane_normal.norm());
+		cameraInGround=P_latest-length_diretion*plane_normal/(plane_normal.norm());
+		float dis=abs((plane_normal.dot(cameraInGround) + arrowBasePointInGround->initPlane[3]) / (plane_normal.norm()));
+		printf("disCameraInGround:%f, length:%f\n",dis,length_diretion);
+		
+		//固定的目标点
+		Vector3f destPoint(3,0,0);
+		Vector3f nextDestPoint(3,-3,0);
+		//计算当前目标点和下一目标点在ground平面的投影点
+		length_diretion=(plane_normal.dot(destPoint) + arrowBasePointInGround->initPlane[3]) / (plane_normal.norm());
+		destPoint=destPoint-length_diretion*plane_normal/(plane_normal.norm());
+		Vector3f plane_normalNext(arrowBasePointInGroundNext->initPlane[0], arrowBasePointInGroundNext->initPlane[1], arrowBasePointInGroundNext->initPlane[2]);
+		length_diretion=(plane_normalNext.dot(nextDestPoint) + arrowBasePointInGroundNext->initPlane[3]) / (plane_normalNext.norm());
+		nextDestPoint=nextDestPoint-length_diretion*plane_normalNext/(plane_normalNext.norm());
+		
+		
+		//计算箭头的当前目标方向和下一目标方向
+		Vector3f arrowDiretInGround=(destPoint-cameraInGround);
+		float destDis=arrowDiretInGround.norm();
+		arrowDiretInGround=arrowDiretInGround/destDis;
+		Vector3f arrowDiretInGroundNext=(nextDestPoint-destPoint);
+		float destDisNext=arrowDiretInGroundNext.norm();
+		arrowDiretInGroundNext=arrowDiretInGroundNext/destDisNext;
+	
+		//箭头固定在光心投影点和目标点的矢量方向上，距离光心投影点一定的距离disArrowAndCamera；arrow的大小由lengthc描述
+		//箭头两边长度
+		float lengthc = 0.125;
+		//箭头前后宽度
+		float singleArrowLen=sqrt(2.0)*lengthc/2;
+		//箭头距离光心水平距离
+		float disArrowAndCamera=1;
+		//显示箭头总数目
+		int singleArrowNumAll=10;
+		int arrowNumPart1=0;
+		int arrowNumpart2=0;
+		
+		Vector3f ori, cox, coy, coz;
+		ori=cameraInGround+disArrowAndCamera*arrowDiretInGround;
+		Vector3f oriNext,coxNext,coyNext,cozNext;
+		oriNext=destPoint;
+		
+		//计算当前目标箭头数目和下一目标箭头数目
+		if(singleArrowLen*singleArrowNumAll+disArrowAndCamera<destDis){
+			arrowNumPart1=singleArrowNumAll;
+			arrowNumpart2=0;
+		}
+		else{
+			arrowNumPart1=floor((destDis-disArrowAndCamera)/singleArrowLen);
+			
+			arrowNumpart2=singleArrowNumAll-arrowNumPart1;
+			
+		}
+		
+		//更新箭头的位置
+		Vector3f leftRightDire=arrowDiretInGround.cross(plane_normal);
+		leftRightDire=leftRightDire/leftRightDire.norm();
+		
+		Vector3f xDirec=(leftRightDire+arrowDiretInGround);
+		xDirec=xDirec/xDirec.norm();
+		Vector3f yDirec=(-leftRightDire+arrowDiretInGround);
+		yDirec=yDirec/yDirec.norm();
+		Vector3f zDirec=plane_normal/plane_normal.norm();
+		cox=ori+lengthc*xDirec;
+		coy=ori+lengthc*yDirec;
+		coz=ori+lengthc*zDirec;
+		
+		arrowBasePointInGround->ori=ori;
+		arrowBasePointInGround->cox=cox;
+		arrowBasePointInGround->coy=coy;
+		arrowBasePointInGround->coz=coz;
+		arrowBasePointInGround->size=lengthc;
+		arrowBasePointInGround->lix=xDirec;
+		arrowBasePointInGround->liy=yDirec;
+		arrowBasePointInGround->liz=zDirec;
+		
+		Vector3f leftRightDireNext=arrowDiretInGroundNext.cross(plane_normalNext);
+		leftRightDireNext=leftRightDireNext/leftRightDireNext.norm();
+		
+		Vector3f xDirecNext=(leftRightDireNext+arrowDiretInGroundNext);
+		xDirecNext=xDirecNext/xDirecNext.norm();
+		Vector3f yDirecNext=(-leftRightDireNext+arrowDiretInGroundNext);
+		yDirecNext=yDirecNext/yDirecNext.norm();
+		Vector3f zDirecNext=plane_normalNext/plane_normalNext.norm();
+		coxNext=oriNext+lengthc*xDirecNext;
+		coyNext=oriNext+lengthc*yDirecNext;
+		cozNext=oriNext+lengthc*zDirecNext;
+		
+		arrowBasePointInGroundNext->ori=oriNext;
+		arrowBasePointInGroundNext->cox=coxNext;
+		arrowBasePointInGroundNext->coy=coyNext;
+		arrowBasePointInGroundNext->coz=cozNext;
+		arrowBasePointInGroundNext->size=lengthc;
+		arrowBasePointInGroundNext->lix=xDirecNext;
+		arrowBasePointInGroundNext->liy=yDirecNext;
+		arrowBasePointInGroundNext->liz=zDirecNext;
+		
+		//绘制已有的箭头
+		drawAnyArrow(result, arrowBasePointInGround->ori, arrowBasePointInGround->cox, arrowBasePointInGround->coy, arrowNumPart1, P_latest, R_latest, true);
+		drawAnyArrow(result, arrowBasePointInGroundNext->ori, arrowBasePointInGroundNext->cox, arrowBasePointInGroundNext->coy, arrowNumpart2, P_latest, R_latest, true);
+		
+		
+		
+	}
+	
+	
+	
+	//添加新的ground平面或更新ground平面
+	if (tapFlag and point_inlier.size()>28)
+	{
+		//手触屏幕的位置
+		float xx = 480 - locationTapY -1;
+		float yy = locationTapX;
+		Vector3f Pc;
+		Vector2f box_center_xy, center_input;
+		center_input<< xx, yy;
+		//计算ground点集中心点在投影到图像中的位置
+		Pc = (R_latest * RIC).transpose()* (groundPlanePoint - 1.0*P_latest  - R_latest * Vector3f(0,0.043,0));
+		box_center_xy.x() = FOCUS_LENGTH_X * Pc.x() / Pc.z()+ 240;
+		box_center_xy.y() = FOCUS_LENGTH_Y * Pc.y() / Pc.z()+ 320;
+		
+		
+		//如果手触屏幕位置离ground点集较近，且点集中位于平面内的点数多于上一次的plane，则更新ground平面
+		if ( (box_center_xy - center_input).norm()<150)
+		{
+			
+			if(arrowBasePointInGround->idx==-1){
+				arrowBasePointInGround->idx = 0;
+				arrowBasePointInGround->boxflag = true;
+				arrowBasePointInGround->moveflag = true;
+				arrowBasePointInGround->initPlane = findPlane(point_inlier);
+				arrowBasePointInGroundNext->idx=1;
+				arrowBasePointInGroundNext->boxflag=true;
+				arrowBasePointInGroundNext->moveflag=true;
+				arrowBasePointInGroundNext->initPlane=arrowBasePointInGround->initPlane;
+				
+			}
+			else{
+				float inPlanePointRateLast=inPlanePointRate;
+				Vector4f initPlaneTmp=findPlane(point_inlier);
+				if(inPlanePointRateLast<inPlanePointRate){
+					arrowBasePointInGround->initPlane = initPlaneTmp;
+					arrowBasePointInGroundNext->initPlane = initPlaneTmp;
+					printf("inPlanePointRateLast:%f\n",inPlanePointRateLast);
+				}
+			}
+			
+			
+		}
+		tapFlag = false;
+	}
+}
+
 
 /////draw existing boxes in virtual camera
 void DrawResult::drawBoxVirturCam(cv::Mat &result)
