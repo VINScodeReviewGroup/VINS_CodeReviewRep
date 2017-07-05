@@ -79,6 +79,10 @@ public:
     //map<int, pair <int, pair< Vector3f, vector<Vector3f> > > > Ground;
     //map<int, pair <int, Vector3f > > Ground;
     vector<GroundPoint> Grounds;
+	//new variable wrz
+	GroundPoint* groundPointFixedWithCamera;
+	
+	float inPlanePointRate=0;
     
     int Ground_idx;
     
@@ -121,6 +125,8 @@ public:
     void computeAR(vector<Vector3f> &point_cloud, Vector3f &model);
     
     void drawAR(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update);
+	void drawArrowAR(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update);
+	void drawFixedArrowWithCameraAR(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update);
     void drawGround(cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest);
     void drawBox(cv::Mat &result, Vector3f corner_0, Vector3f corner_x, Vector3f corner_y, Vector3f corner_z, float size, Vector3f P_latest, Matrix3f R_latest, bool inAR);
 	//draw arrow wrz

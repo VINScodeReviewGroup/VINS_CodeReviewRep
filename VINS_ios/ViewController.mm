@@ -506,7 +506,9 @@ bool vins_updated = false;
                 {
                     cv::Mat tmp;
                     vins.drawresult.startInit = true;
-                    vins.drawresult.drawAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
+                    //vins.drawresult.drawAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
+					//vins.drawresult.drawArrowAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
+					vins.drawresult.drawFixedArrowWithCameraAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
                     vins_updated = false;
                     
                     cv::cvtColor(image, tmp, CV_RGBA2BGR);
@@ -1429,6 +1431,8 @@ bool start_active = true;
             vins.drawresult.finger_p = 0;
             if ((vins.drawresult.finger_s ++) > 7)
                 vins.drawresult.finger_state = 1;
+			//debug_wrz
+			printf("locationX: %f, locationY:%f\n",vins.drawresult.locationX,vins.drawresult.locationY);
         }
     }
     
@@ -1494,6 +1498,9 @@ bool start_active = true;
         vins.drawresult.locationTapY = point.y * 480.0 / imageView.frame.size.height;
         
         vins.drawresult.tapFlag = true;
+		
+		//debug_wrz
+		printf("tap once\n");
         
     }
     
