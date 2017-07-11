@@ -148,6 +148,8 @@ class VINS
     bool updating_imageAI;
     cv::Mat image_show;
     cv::Mat imageAI;
+	//wrz
+	cv::Mat imageGray;
     Matrix3f RcForView;
     enum InitStatus
     {

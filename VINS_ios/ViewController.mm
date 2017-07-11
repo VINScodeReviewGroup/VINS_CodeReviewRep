@@ -290,6 +290,59 @@ float total_odom = 0;
     
 }
 
+
+- (void)httpAsynchronousRequest:(UIImage *) photo
+{
+ 
+ NSURL *url = [NSURL URLWithString:@"http://10.84.137.135:8090"];
+ 
+ NSData *data = UIImageJPEGRepresentation(photo, 1.0);
+ 
+ //进行base64编码
+ NSString *pictureDataString=[data base64EncodedStringWithOptions:0];
+ 
+	
+ 
+ //进行URLEncode 对特殊符号进行编码，防止url对特殊符号的替换
+ NSString *encodedString = (NSString *)CFBridgingRelease(CFURLCreateStringByAddingPercentEscapes(
+                         NULL,
+                         (CFStringRef)pictureDataString,
+                         NULL,
+                         (CFStringRef)@"!*'();:@&=+$,/?%#[]",
+                         kCFStringEncodingUTF8 ));
+ 
+ //需要传输的字符串
+ NSString *post = [NSString stringWithFormat:@"image64=%@&model=%@", encodedString, @"Didi_T1_F4"];
+ 
+ //http模板
+ NSData *postData = [post dataUsingEncoding:NSASCIIStringEncoding allowLossyConversion:YES];
+ 
+ NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+ [request setHTTPMethod:@"POST"];
+ [request setHTTPBody:postData];
+ [request setTimeoutInterval:10.0];
+ [request setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
+ 
+ 
+ NSOperationQueue *queue = [[NSOperationQueue alloc]init];
+ [NSURLConnection sendAsynchronousRequest:request
+									queue:queue
+						completionHandler:^(NSURLResponse *response, NSData *data, NSError *error){
+							if (error) {
+								NSLog(@"Httperror:%@%d", error.localizedDescription,error.code);
+							}else{
+								
+								NSInteger responseCode = [(NSHTTPURLResponse *)response statusCode];
+								
+								NSString *responseString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+								
+								NSLog(@"HttpResponseCode:%d", responseCode);
+								NSLog(@"HttpResponseBody %@",responseString);
+							}
+						}];
+ 
+}
+
 /*
  Main process image thread: this thread detects and track feature between two continuous images
  and takes the newest VINS result and the corresponding image to draw AR and trajectory.
@@ -308,7 +361,9 @@ bool vins_updated = false;
 {
     if(isCapturing == YES)
     {
-        //NSLog(@"image processing");
+		
+		
+		//NSLog(@"image processing");
         float lowPart = image.at<float>(0,0);  //modify opencv library, timestamp was stored at index 0,0
         float highPart = image.at<float>(0,1);
         //image.at<float>(0,0) = image.at<float>(1,0);
@@ -322,6 +377,7 @@ bool vins_updated = false;
         Group[1] = highPart;
         double* time_now_decode = (double*)Group;
         double time_stamp = *time_now_decode;
+		//printf("time_Stamp:%f, lowPart:%f, highPart:%f, group0:%f,\n",time_stamp,lowPart,highPart);
 		
 		//如果是第一帧，不用处理
         if(lateast_imu_time <= 0)
@@ -386,6 +442,8 @@ bool vins_updated = false;
         clahe->setClipLimit(3);
         clahe->apply(gray, img_equa);
         //img_equa = gray;
+		gray.copyTo(vins.imageGray);
+		
         TS(time_feature);
         
         vector<Point2f> good_pts;
@@ -1429,6 +1487,9 @@ bool start_active = true;
             vins.drawresult.finger_p = 0;
             if ((vins.drawresult.finger_d ++) > 7)
                 vins.drawresult.finger_state = 2;
+			//debug wrz
+			static int nnn=0;
+			printf("twoTouch:%u\n",nnn=(nnn<100?++nnn:0));
         }
         else
         {
@@ -1489,6 +1550,7 @@ bool start_active = true;
         //{
         vins.drawresult.radiusAR -= recognizer.velocity * 0.5;
         //}
+		
     }
     
 }
@@ -1517,6 +1579,26 @@ bool start_active = true;
         
     }
     
+}
+
+
+//- (IBAction)correctPath:(UIButton *)sender {
+//	//send image to server wrz
+//	NSLog(@"correct path!");
+//	
+//	//UIImage *uiimage=MatToUIImage(vins.imageGray);
+//	//[self httpAsynchronousRequest:uiimage];
+//	
+//
+//
+//
+//}
+
+- (IBAction)correctPath:(UIButton *)sender {
+	NSLog(@"correct path!");
+	//send image to server
+	UIImage *uiimage=MatToUIImage(vins.imageGray);
+	[self httpAsynchronousRequest:uiimage];
 }
 
 - (void) handleLongPress:(UILongPressGestureRecognizer*) recognizer
@@ -1866,6 +1948,8 @@ bool iosVersion()
     }
 }
 
+
+
 @end
 
 /**************************************************************UNITY INTERFACE**********************************************************/
@@ -1888,7 +1972,7 @@ extern "C" {
         initR << 0,  0,  -1.0,
         0.0,  1.0,  0.0,
         1.0,  0.0,  0.0;
-        
+ 
         if (vins.solver_flag != vins.NON_LINEAR) {
             *x = *y = *z = 0;
             *qx = *qy = *qz = 0;

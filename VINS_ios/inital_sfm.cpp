@@ -295,7 +295,7 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
     delete [] c_Translation;
     delete [] c_Quat;
     delete [] Pose;
-    //
+    //设置残差函数
     for (int i = 0; i < feature_num; i++)
     {
         if (sfm_f[i].state != true)

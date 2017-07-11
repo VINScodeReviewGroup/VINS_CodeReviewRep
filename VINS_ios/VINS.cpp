@@ -998,6 +998,7 @@ bool VINS::solveInitial()
         {
             cout << "key frame " << i << endl;
             frame_it->second.is_key_frame = true;
+			//将camera坐标系下的位姿转至imu坐标系
             frame_it->second.R = Q[i].toRotationMatrix() * ric.transpose();
             frame_it->second.T = T[i];
             i++;
@@ -1063,6 +1064,7 @@ bool VINS::solveInitial()
         MatrixXd T_pnp;
         cv::cv2eigen(t, T_pnp);
         T_pnp = R_pnp * (-T_pnp);
+		//将camera坐标系下的位姿转化为imu坐标系下
         frame_it->second.R = R_pnp * ric.transpose();
         frame_it->second.T = T_pnp;
     }
@@ -1119,7 +1121,7 @@ bool VINS::visualInitialAlign()
     f_manager.clearDepth(dep);
     
     //triangulat on cam pose , no tic
-	//根据更新后的位姿重新三角化三维点云
+	//根据更新后的位姿重新三角化三维点云，主要更新深度信息
     Vector3d TIC_TMP;
     TIC_TMP.setZero();
     f_manager.triangulate(Ps, TIC_TMP, ric, true);
@@ -1130,6 +1132,7 @@ bool VINS::visualInitialAlign()
     {
         pre_integrations[i]->repropagate(Vector3d::Zero(), Bgs[i]);
     }
+	//之前的Ps为camera坐标系下的，但Rs为imu坐标系下；并Rs[0]作为初始帧了
     for (int i = frame_count; i >= 0; i--)
         Ps[i] = s * Ps[i] - Rs[i] * tic - (s * Ps[0] - Rs[0] * tic);
     
@@ -1142,11 +1145,12 @@ bool VINS::visualInitialAlign()
         if(frame_i->second.is_key_frame)
         {
             kv++;
+			//状态向量中的速度均为相对当前坐标系下的，需将其转为惯性系下
             Vs[kv] = frame_i->second.R * x.segment<3>(kv * 3);
         }
     }
     printf("init finish--------------------\n");
-    
+    //由scale更新三维点云深度
     for (auto &it_per_id : f_manager.feature)
     {
         it_per_id.used_num = it_per_id.feature_per_frame.size();
@@ -1154,13 +1158,14 @@ bool VINS::visualInitialAlign()
             continue;
         it_per_id.estimated_depth *= s;
     }
-    
+    //由重力方向得到首帧的初始位姿
     Matrix3d R0 = Utility::g2R(g);
     double yaw0 = Utility::R2ypr(R0).x();
     Matrix3d yaw_refine = Utility::ypr2R(Vector3d{-yaw0,0,0});
     R0 = yaw_refine * R0;
     g = R0 * g;
     //Matrix3d rot_diff = R0 * Rs[0].transpose();
+	//由初始位姿更新所有位姿速度状态
     Matrix3d rot_diff = R0;
     for (int i = 0; i <= frame_count; i++)
     {
