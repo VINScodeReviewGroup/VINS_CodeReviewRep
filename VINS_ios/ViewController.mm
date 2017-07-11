@@ -390,6 +390,7 @@ bool vins_updated = false;
         
         vector<Point2f> good_pts;
         vector<double> track_len;
+		//提取角点，光流法跟踪匹配
         featuretracker.readImage(img_equa, img_with_feature,frame_cnt, good_pts, track_len);
         TE(time_feature);
 #if VINS_FRAMEWORK
@@ -408,7 +409,7 @@ bool vins_updated = false;
         int is_calculate = false;
         if(featuretracker.img_cnt==0)
         {
-			//归一化的点云（深度为单位1），存在img_msg_buf
+			//每张图像的local点云（深度为单位1），存在img_msg_buf
 			img_msg->point_clouds = featuretracker.image_msg;
             //img_msg callback
             m_buf.lock();
@@ -459,6 +460,7 @@ bool vins_updated = false;
             }
         }
         featuretracker.img_cnt = (featuretracker.img_cnt + 1) % FREQ;
+		//？
         for (int i = 0; i < good_pts.size(); i++)
         {
             cv::circle(image, good_pts[i], 0, cv::Scalar(255 * (1 - track_len[i]), 0, 255 * track_len[i]), 7); //BGR
@@ -492,6 +494,9 @@ bool vins_updated = false;
                     image_pool.pop();
             }
         }
+		//debug wrz
+		if(CAMERA_MODE)printf("camera_mode:true\n");
+		else printf("camer_mode:false\n");
         if(ui_main || start_show == false || vins.solver_flag != VINS::NON_LINEAR)  //show image and AR
         {
 #if VINS_FRAMEWORK
@@ -501,7 +506,13 @@ bool vins_updated = false;
 #else
             if(CAMERA_MODE)
             {
-                cv::Mat tmp2;
+				//debug wrz
+				if(ui_main){
+					static int iii=0;
+					printf("ui_main=true,%d\n",iii<100?++iii:(iii=0));
+				}
+				
+				cv::Mat tmp2;
                 if(vins.solver_flag == VINS::NON_LINEAR && start_show)
                 {
                     cv::Mat tmp;

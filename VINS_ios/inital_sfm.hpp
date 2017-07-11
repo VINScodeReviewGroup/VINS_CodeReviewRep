@@ -31,7 +31,8 @@ struct ReprojectionError3D
     template <typename T>
     bool operator()(const T* const camera_R, const T* const camera_T, const T* point, T* residuals) const
     {
-        T p[3];
+		//计算单位特征点的残差,这里的rotation=Rcw,translation=cTwc
+		T p[3];
         ceres::QuaternionRotatePoint(camera_R, point, p);
         p[0] += camera_T[0]; p[1] += camera_T[1]; p[2] += camera_T[2];
         T xp = p[0] / p[2];

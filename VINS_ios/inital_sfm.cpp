@@ -47,7 +47,8 @@ bool GlobalSFM::solveFrameByPnP(Matrix3d &R_initial, Vector3d &P_initial, int i,
         {
             if (sfm_f[j].observation[k].first == i)
             {
-                Vector2d img_pts = sfm_f[j].observation[k].second;
+				//由于obervation为单位特征点，而非图像平面的坐标，后面pnp计算中无需相机内参K矩阵
+				Vector2d img_pts = sfm_f[j].observation[k].second;
                 cv::Point2f pts_2(img_pts(0), img_pts(1));
                 pts_2_vector.push_back(pts_2);
                 cv::Point3f pts_3(sfm_f[j].position[0], sfm_f[j].position[1], sfm_f[j].position[2]);
@@ -138,7 +139,8 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
                           const Matrix3d relative_R, const Vector3d relative_T,
                           vector<SFMFeature> &sfm_f, map<int, Vector3d> &sfm_tracked_points)
 {
-    feature_num = sfm_f.size();
+	//sfm每个元素为一组跟踪的特征点的观测值，即图像上的坐标
+	feature_num = sfm_f.size();
     //cout << "set 0 and " << l << " as known " << endl;
     // have relative_r relative_t
     // intial two view
@@ -188,6 +190,7 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
         {
             Matrix3d R_initial = c_Rotation[i - 1];
             Vector3d P_initial = c_Translation[i - 1];
+			//Pnp解算第i帧的位姿，三维点为前面三角化的点云中可被当前帧观测到的那些三维点
             if(!solveFrameByPnP(R_initial, P_initial, i, sfm_f))
                 return false;
             c_Rotation[i] = R_initial;
@@ -198,6 +201,7 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
         }
         
         // triangulate point based on the solve pnp result
+		//根据已有的两帧的位姿从sfm中未三角化的跟踪单位特征点三角化出三维点云
         triangulateTwoFrames(i, Pose[i], frame_num - 1, Pose[frame_num - 1], sfm_f);
     }
     //3: triangulate l-----l+1 l+2 ... frame_num -2
@@ -259,10 +263,11 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
      }
      */
     //full BA
-	
+	//进行全局优化
     ceres::Problem problem;
     ceres::LocalParameterization* local_parameterization = new ceres::QuaternionParameterization();
     //cout << " begin full BA " << endl;
+	//设置待优化位姿参数
     for (int i = 0; i < frame_num; i++)
     {
         //double array for ceres
@@ -275,6 +280,7 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
         c_rotation[i][3] = c_Quat[i].z();
         problem.AddParameterBlock(c_rotation[i], 4, local_parameterization);
         problem.AddParameterBlock(c_translation[i], 3);
+		//固定第l帧位姿，第l帧为初始帧
         if (i == l)
         {
             problem.SetParameterBlockConstant(c_rotation[i]);
@@ -289,7 +295,7 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
     delete [] c_Translation;
     delete [] c_Quat;
     delete [] Pose;
-    
+    //
     for (int i = 0; i < feature_num; i++)
     {
         if (sfm_f[i].state != true)
@@ -332,10 +338,11 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
     }
     for (int i = 0; i < frame_num; i++)
     {
-        //将Twc转为Tcw
+        //将cTwc转为wTcw
         T[i] = -1 * (q[i] * Vector3d(c_translation[i][0], c_translation[i][1], c_translation[i][2]));
         //cout << "final  t" << " i " << i <<"  " << T[i](0) <<"  "<< T[i](1) <<"  "<< T[i](2) << endl;
     }
+	//记录sfm得到的三维点云，每个元素对应每组跟踪的单位特征点的id以及该组特征点序列对应的三角化的三维点坐标
     for (int i = 0; i < (int)sfm_f.size(); i++)
     {
         if(sfm_f[i].state)

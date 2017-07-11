@@ -64,7 +64,9 @@ double FeatureManager::compensatedParallax1(FeaturePerId &f_per_id)
 
 double FeatureManager::compensatedParallax2(const FeaturePerId &it_per_id, int frame_count)
 {
-    const FeaturePerFrame &frame_i = it_per_id.feature_per_frame[frame_count - 2 - it_per_id.start_frame];
+	//前一帧的单位特征点
+	const FeaturePerFrame &frame_i = it_per_id.feature_per_frame[frame_count - 2 - it_per_id.start_frame];
+	//当前帧对应跟踪的单位特征点
     const FeaturePerFrame &frame_j = it_per_id.feature_per_frame[frame_count - 1 - it_per_id.start_frame];
     
     int r_i = frame_count - 2;
@@ -78,6 +80,7 @@ double FeatureManager::compensatedParallax2(const FeaturePerId &it_per_id, int f
     
     Vector3d p_i = frame_i.point;
     Vector3d p_i_comp = p_i;
+	//没用补偿？
     //p_i_comp = ric.transpose() * Rs[r_j].transpose() * Rs[r_i] * ric * p_i;
     
     double dep_i = p_i(2);
@@ -105,43 +108,49 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, Vec
     double parallax_sum = 0;
     parallax_num = 0;
     last_track_num = 0;
+	//遍历每个单位特征点（深度归一）
     for (auto &id_pts : image_msg)
     {
-        FeaturePerFrame f_per_fra(id_pts.second);
+		//每帧内的某一个单位特征点
+		FeaturePerFrame f_per_fra(id_pts.second);
         
         int feature_id = id_pts.first;
+		//feature存储每个id对应的一组被跟踪的单位特征点；FeaturePerId存储某个id对应的一组被跟踪的单位特征点；
         auto it = find_if(feature.begin(), feature.end(), [feature_id](const FeaturePerId &it)
                           {
                               return it.feature_id == feature_id;
                           });
-        //new feature
+        //如果是新的单位特征点，则添加到feature内
         if (it == feature.end())
         {
             feature.push_back(FeaturePerId(feature_id, frame_count)); //give id and start frame
             feature.back().feature_per_frame.push_back(f_per_fra);    //give point
         }
-        //find match with previous feature
+        //如果不是新的单位特征点，而是和之前图像被跟踪成功的单位特征点，则添加到相应id的那组被跟踪单位点vector内，并统计能够被跟踪的单位特征点数目
         else if (it->feature_id == feature_id)
         {
             it->feature_per_frame.push_back(f_per_fra);
             last_track_num ++;
         }
     }
-    
+    //第一帧不算；如果track的单位特征点数目很少，表明和前一帧的差别明显，有较大可能拥有较明显的视差
     if (frame_count < 2 || last_track_num < 20)
         return true;
     
     for (auto &it_per_id : feature)
     {
-        if (it_per_id.start_frame <= frame_count - 2 &&
+		//跟踪的特征点起始帧必须在当前帧前两帧之前；必须在当前帧或前一帧依然能够跟踪到
+		if (it_per_id.start_frame <= frame_count - 2 &&
             it_per_id.start_frame + int(it_per_id.feature_per_frame.size()) - 1 >= frame_count - 1)
         {
-            parallax_sum += compensatedParallax2(it_per_id, frame_count);
+			//计算当前帧和前一帧之间每对跟踪的单位特征点间的视差；视差补偿，但好像注释掉没用？
+			parallax_sum += compensatedParallax2(it_per_id, frame_count);
             parallax_num++;
         }
     }
     
     printf("parallax sum = %lf parallax_num = %d\n",parallax_sum, parallax_num);
+	//如果都没跟踪到特征点，肯定要加入关键帧
     if (parallax_num == 0)
     {
         return true;
@@ -206,7 +215,8 @@ void FeatureManager::triangulate(Vector3d Ps[], Vector3d tic, Matrix3d ric, bool
             continue;
         
         it_per_id.is_outlier = false;
-        
+		
+		//特征点首次被观察的帧为标准，更新点云深度？
         int imu_i = it_per_id.start_frame, imu_j = imu_i - 1;
         
         Vector3d p_i = Ps[imu_i], p_j;
@@ -216,6 +226,7 @@ void FeatureManager::triangulate(Vector3d Ps[], Vector3d tic, Matrix3d ric, bool
         int svd_idx = 0;
         
         Eigen::Matrix<double, 3, 4> P0;
+		//tic：imu指向camera，在imu坐标系下；ric:从camera转换到imu
         Eigen::Vector3d t0 = Ps[imu_i] + Rs[imu_i] * tic;
         Eigen::Matrix3d R0 = Rs[imu_i] * ric;
         P0.leftCols<3>() = Eigen::Matrix3d::Identity();

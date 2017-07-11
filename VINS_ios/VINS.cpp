@@ -387,7 +387,8 @@ void VINS::processImage(map<int, Vector3d> &image_msg, double header, int buf_nu
 
     if(solver_flag == INITIAL)
     {
-        ImageFrame imageframe(image_msg, header);
+		//初始化时的all_image_frame？
+		ImageFrame imageframe(image_msg, header);
         imageframe.pre_integration = tmp_pre_integration;
         all_image_frame.insert(make_pair(header, imageframe));
         tmp_pre_integration = new IntegrationBase{acc_0, gyr_0, Vector3d(0,0,0), Vector3d(0,0,0)};
@@ -933,8 +934,10 @@ bool VINS::solveInitial()
     }
      */
     // global sfm
+	//不是frame_count吗
     Quaterniond *Q = new Quaterniond[frame_count + 1];
     Vector3d *T = new Vector3d[frame_count + 1];
+	//sfm_tracked_points记录sfm得到的三维点云，每个元素对应每组跟踪的单位特征点的id以及该组特征点序列对应的三角化的三维点坐标
     map<int, Vector3d> sfm_tracked_points;
     vector<SFMFeature> sfm_f;
     {
@@ -948,11 +951,13 @@ bool VINS::solveInitial()
             for (auto &it_per_frame : it_per_id.feature_per_frame)
             {
                 imu_j++;
+				//此处的observation为光心坐标系下的单位特征点，而非图像平面坐标的观测特征点
                 Vector3d pts_j = it_per_frame.point;
                 tmp_feature.observation.push_back(make_pair(imu_j, Eigen::Vector2d{pts_j.x(), pts_j.y()}));
             }
             sfm_f.push_back(tmp_feature);
         }
+		//得到第l帧和第WINDOW_SIZE帧之间的位姿
         Matrix3d relative_R;
         Vector3d relative_T;
         int l;
@@ -963,7 +968,8 @@ bool VINS::solveInitial()
         }
         //update init progress
         initProgress = 30;
-        
+		
+		//进行全局sfm得到初始序列帧的位姿和初始三维点云
         GlobalSFM sfm;
         if(!sfm.construct(frame_count + 1, Q, T, l,
                           relative_R, relative_T,
@@ -979,12 +985,14 @@ bool VINS::solveInitial()
         initProgress = 50;
     }
     //solve pnp for all frame
+	//sfm全局优化后继续对每帧进行Pnp进一步优化
     map<double, ImageFrame>::iterator frame_it;
     map<int, Vector3d>::iterator it;
     frame_it = all_image_frame.begin( );
     for (int i = 0; frame_it != all_image_frame.end( ); frame_it++)
     {
         // provide initial guess
+		//没太懂？除了关键帧外其他的帧进行Pnp位姿结算优化
         cv::Mat r, rvec, t, D, tmp_r;
         if((frame_it->first) == Headers[i])
         {
@@ -999,27 +1007,31 @@ bool VINS::solveInitial()
         {
             i++;
         }
+		//Rwc转为Rcw,wTcw转为cTwc
         Matrix3d R_inital = (Q[i].inverse()).toRotationMatrix();
         Vector3d P_inital = - R_inital * T[i];
         cv::eigen2cv(R_inital, tmp_r);
         cv::Rodrigues(tmp_r, rvec);
         cv::eigen2cv(P_inital, t);
-        
+		
+		//
         frame_it->second.is_key_frame = false;
         vector<cv::Point3f> pts_3_vector;
         vector<cv::Point2f> pts_2_vector;
         for (auto &id_pts : frame_it->second.points)
         {
-            int feature_id = id_pts.first;
+			//frame_it->second每个元素为单位特征点以及该单位特征点所在组的id，通过该id可查询对应的三角化的到的三维点
+			int feature_id = id_pts.first;
             //cout << "feature id " << feature_id;
             //cout << " pts image_frame " << (i_p.second.head<2>() * 460 ).transpose() << endl;
+			//三维点
             it = sfm_tracked_points.find(feature_id);
             if(it != sfm_tracked_points.end())
             {
                 Vector3d world_pts = it->second;
                 cv::Point3f pts_3(world_pts(0), world_pts(1), world_pts(2));
                 pts_3_vector.push_back(pts_3);
-                
+                //光心坐标系下的单位特征点，取其x,y分量
                 Vector2d img_pts = id_pts.second.head<2>();
                 cv::Point2f pts_2(img_pts(0), img_pts(1));
                 pts_2_vector.push_back(pts_2);
@@ -1028,7 +1040,7 @@ bool VINS::solveInitial()
         cv::Mat K = (cv::Mat_<double>(3, 3) << 1, 0, 0,
                      0, 1, 0,
                      0, 0, 1);
-
+		//Pnp要求点对不少于6对
         if(pts_3_vector.size() < 6 )
         {
             printf("init Not enough points for solve pnp !\n");
@@ -1046,6 +1058,7 @@ bool VINS::solveInitial()
         MatrixXd R_pnp,tmp_R_pnp;
         cv::cv2eigen(r, tmp_R_pnp);
         //cout << "R_pnp " << endl << R_pnp << endl;
+		//从Rcw，cTwc恢复为Rwc和wTcw
         R_pnp = tmp_R_pnp.transpose();
         MatrixXd T_pnp;
         cv::cv2eigen(t, T_pnp);
@@ -1060,7 +1073,7 @@ bool VINS::solveInitial()
     initProgress = 75;
     
     printf("init PS after pnp %lf %lf %lf\n", Ps[0].x(),Ps[0].y(), Ps[0].z());
-    
+    //进行其他部分的初始化
     if (visualInitialAlign())
     {
         return true;
@@ -1106,10 +1119,12 @@ bool VINS::visualInitialAlign()
     f_manager.clearDepth(dep);
     
     //triangulat on cam pose , no tic
+	//根据更新后的位姿重新三角化三维点云
     Vector3d TIC_TMP;
     TIC_TMP.setZero();
     f_manager.triangulate(Ps, TIC_TMP, ric, true);
-    
+	
+	//获得scale
     double s = (x.tail<1>())(0);
     for (int i = 0; i <= WINDOW_SIZE; i++)
     {
@@ -1163,11 +1178,14 @@ bool VINS::relativePose(int camera_id, Matrix3d &relative_R, Vector3d &relative_
     for (int i = 0; i < WINDOW_SIZE; i++)
     {
         vector<pair<Vector3d, Vector3d>> corres;
+		//得到第i帧和第WINDOW_SIZE帧之间的匹配点对
         corres = f_manager.getCorresponding(i, WINDOW_SIZE);
+		//匹配点对必须大于20对
         if (corres.size() > 20)
         {
             double sum_parallax = 0;
             double average_parallax;
+			//统计所有点对视差和，计算平均视差
             for (int j = 0; j < int(corres.size()); j++)
             {
                 Vector2d pts_0(corres[j].first(0), corres[j].first(1));
@@ -1184,6 +1202,7 @@ bool VINS::relativePose(int camera_id, Matrix3d &relative_R, Vector3d &relative_
                 fail_times++;
                 return false;
             }
+			//如果第i帧和第WINDOW_SIZE帧之间有足够丰富的匹配点对，能够解算出相对位姿，则停止遍历，将l设置为i
             if(m_estimator.solveRelativeRT(corres, relative_R, relative_T))
             {
                 l = i;
