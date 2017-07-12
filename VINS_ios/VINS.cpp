@@ -24,6 +24,9 @@ failure_hand{false},
     last_R.setIdentity();
     last_P_old.setZero();
     last_R_old.setIdentity();
+	correctFlag=false;
+	curTruthPos.setZero();
+	curTruthPosIndex=WINDOW_SIZE-1;
 }
 
 void VINS::setIMUModel()
@@ -90,15 +93,43 @@ void VINS::old2new()
 {
     for (int i = 0; i <= WINDOW_SIZE; i++)
     {
-        para_Pose[i][0] = Ps[i].x();
-        para_Pose[i][1] = Ps[i].y();
-        para_Pose[i][2] = Ps[i].z();
-        Quaterniond q{Rs[i]};
-        para_Pose[i][3] = q.x();
-        para_Pose[i][4] = q.y();
-        para_Pose[i][5] = q.z();
-        para_Pose[i][6] = q.w();
-        
+		//wrz
+		if(i==(WINDOW_SIZE-1)){
+			if(correctFlag){
+				para_Pose[i][0]=curTruthPos.x();
+				para_Pose[i][1]=curTruthPos.y();
+				para_Pose[i][2]=curTruthPos.z();
+				Quaterniond q{Rs[i]};
+				para_Pose[i][3] = q.x();
+				para_Pose[i][4] = q.y();
+				para_Pose[i][5] = q.z();
+				para_Pose[i][6] = q.w();
+			}
+			else{
+				para_Pose[i][0] = Ps[i].x();
+				para_Pose[i][1] = Ps[i].y();
+				para_Pose[i][2] = Ps[i].z();
+				Quaterniond q{Rs[i]};
+				para_Pose[i][3] = q.x();
+				para_Pose[i][4] = q.y();
+				para_Pose[i][5] = q.z();
+				para_Pose[i][6] = q.w();
+				
+			}
+		}
+		else{
+			para_Pose[i][0] = Ps[i].x();
+			para_Pose[i][1] = Ps[i].y();
+			para_Pose[i][2] = Ps[i].z();
+			Quaterniond q{Rs[i]};
+			para_Pose[i][3] = q.x();
+			para_Pose[i][4] = q.y();
+			para_Pose[i][5] = q.z();
+			para_Pose[i][6] = q.w();
+		}
+		
+		
+		
         para_SpeedBias[i][0] = Vs[i].x();
         para_SpeedBias[i][1] = Vs[i].y();
         para_SpeedBias[i][2] = Vs[i].z();
@@ -162,6 +193,10 @@ void VINS::new2old()
             Vs[i] = rot_diff * Vector3d(para_SpeedBias[i][0],
                                         para_SpeedBias[i][1],
                                         para_SpeedBias[i][2]);
+			//wrz
+			if(correctFlag&&curTruthPosIndex>=0){
+				Ps[i]=Vector3d(para_Pose[curTruthPosIndex][0],para_Pose[curTruthPosIndex][1],para_Pose[curTruthPosIndex][2]);
+			}
         }
         else
         {
@@ -485,7 +520,12 @@ void VINS::solve_ceres(int buf_num)
         problem.AddParameterBlock(para_Pose[i], SIZE_POSE, local_parameterization);
         problem.AddParameterBlock(para_SpeedBias[i], SIZE_SPEEDBIAS);
     }
-    
+	//wrz
+	if(correctFlag&&curTruthPosIndex>=0){
+		problem.SetParameterBlockConstant(para_Pose[curTruthPosIndex]);
+		if(curTruthPosIndex==0)correctFlag=false;
+	}
+	
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
         ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
@@ -499,6 +539,10 @@ void VINS::solve_ceres(int buf_num)
     }
     
     old2new();
+	//debug wrz
+	if(correctFlag&&curTruthPosIndex>=0){
+		printf("curTruthPos:%f, para_Pose:%f, %f, %f\n",curTruthPos.y(),para_Pose[curTruthPosIndex][0],para_Pose[curTruthPosIndex][1],para_Pose[curTruthPosIndex][2]);
+	}
 
     //marginalization factor
     if (last_marginalization_info != nullptr)
@@ -677,6 +721,10 @@ void VINS::solve_ceres(int buf_num)
         }
     }
     new2old();
+	//debug wrz
+	if(correctFlag&&curTruthPosIndex>=0){
+		printf("after ceres—curTruthPos:%f, para_Pose:%f, %f, %f\n",curTruthPos.y(),para_Pose[curTruthPosIndex][0],para_Pose[curTruthPosIndex][1],para_Pose[curTruthPosIndex][2]);
+	}
     
     vector<ceres::ResidualBlockId> residual_set;
     problem.GetResidualBlocks(&residual_set);
@@ -1247,6 +1295,9 @@ void VINS::slideWindow()
                 Ps[i].swap(Ps[i + 1]);
                 Vs[i].swap(Vs[i + 1]);
             }
+			//wrz
+			if(curTruthPosIndex>=0)
+				--curTruthPosIndex;
             Headers[WINDOW_SIZE] = Headers[WINDOW_SIZE - 1];
             Ps[WINDOW_SIZE] = Ps[WINDOW_SIZE - 1];
             Vs[WINDOW_SIZE] = Vs[WINDOW_SIZE - 1];

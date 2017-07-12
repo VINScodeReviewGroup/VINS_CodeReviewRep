@@ -1581,24 +1581,19 @@ bool start_active = true;
     
 }
 
-
-//- (IBAction)correctPath:(UIButton *)sender {
-//	//send image to server wrz
-//	NSLog(@"correct path!");
-//	
-//	//UIImage *uiimage=MatToUIImage(vins.imageGray);
-//	//[self httpAsynchronousRequest:uiimage];
-//	
-//
-//
-//
-//}
-
 - (IBAction)correctPath:(UIButton *)sender {
 	NSLog(@"correct path!");
 	//send image to server
-	UIImage *uiimage=MatToUIImage(vins.imageGray);
-	[self httpAsynchronousRequest:uiimage];
+	//UIImage *uiimage=MatToUIImage(vins.imageGray);
+	//[self httpAsynchronousRequest:uiimage];
+	vins.correctFlag=true;
+	vins.curTruthPosIndex=WINDOW_SIZE-1;
+	vins.curTruthPos.x()=lateast_P.x();
+	vins.curTruthPos.y()=lateast_P.y()-1.0;
+	vins.curTruthPos.z()=lateast_P.z();
+	printf("latest_P:%f, %f, %f",lateast_P.x(),lateast_P.y(),lateast_P.z());
+	
+	
 }
 
 - (void) handleLongPress:(UILongPressGestureRecognizer*) recognizer

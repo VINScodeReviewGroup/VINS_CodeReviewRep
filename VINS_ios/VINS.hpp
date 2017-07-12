@@ -151,6 +151,10 @@ class VINS
 	//wrz
 	cv::Mat imageGray;
     Matrix3f RcForView;
+	bool correctFlag;
+	Vector3f curTruthPos;
+	int curTruthPosIndex;
+	
     enum InitStatus
     {
         FAIL_IMU,
