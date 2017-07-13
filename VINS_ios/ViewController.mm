@@ -27,6 +27,12 @@
 //#define DATA_EXPORT true
 #endif
 
+//wrz
+#define Width_2D_Map_m (1.42*24.5/0.7)
+#define Height_2D_Map_m ((1.42*24.5/0.7)*(2500.0/2960.0))
+#define Width_2D_Map_pixel 2960.0
+#define Height_2D_Map_pixel 2500.0
+
 @interface ViewController ()
 @property (weak, nonatomic) IBOutlet UILabel *X_label;
 @property (weak, nonatomic) IBOutlet UILabel *Y_label;
@@ -291,7 +297,7 @@ float total_odom = 0;
 }
 
 
-- (void)httpAsynchronousRequest:(UIImage *) photo
+- (const NSString*)httpAsynchronousRequest:(UIImage *) photo
 {
  
  NSURL *url = [NSURL URLWithString:@"http://10.84.137.135:8090"];
@@ -323,23 +329,28 @@ float total_odom = 0;
  [request setTimeoutInterval:10.0];
  [request setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
  
- 
+ static NSString* resultStr=[[NSString alloc]init];
+
  NSOperationQueue *queue = [[NSOperationQueue alloc]init];
  [NSURLConnection sendAsynchronousRequest:request
 									queue:queue
 						completionHandler:^(NSURLResponse *response, NSData *data, NSError *error){
-							if (error) {
+														if (error) {
 								NSLog(@"Httperror:%@%d", error.localizedDescription,error.code);
 							}else{
 								
 								NSInteger responseCode = [(NSHTTPURLResponse *)response statusCode];
 								
-								NSString *responseString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+								NSString* responseString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+								resultStr=responseString;
 								
 								NSLog(@"HttpResponseCode:%d", responseCode);
 								NSLog(@"HttpResponseBody %@",responseString);
 							}
+							
+							
 						}];
+	return resultStr;
  
 }
 
@@ -1347,6 +1358,8 @@ vector<IMU_MSG> gyro_buf;  // for Interpolation
 {
     [featureImageView setImage:image];
 }
+
+
 /********************************************************************UI View Controler********************************************************************/
 
 
@@ -1581,17 +1594,113 @@ bool start_active = true;
     
 }
 
+- (IBAction)getInitPoseInMap:(UIButton *)sender {
+	NSLog(@"initial P0 in 2D map");
+	
+	double direction_y=0.0;
+	double direction_x=0.0;
+	double position_y=lateast_P.y();
+	double position_x=lateast_P.x();
+	if([self requstTruthPos:direction_y requestDx:direction_x requestPy:position_y requestPx:position_x]){
+		NSLog(@"wrz initialP0 dy:%f, dx:%f, py:%f, px:%f",direction_y,direction_x,position_y,position_x);
+		vins.hasInitialP0=true;
+	}
+}
+
+-(bool) requstTruthPos:(double&) direction_y requestDx:(double&) direction_x requestPy:(double&) position_y requestPx:(double&) position_x
+{
+	NSLog(@"request true positon from server");
+	//send image to server
+	UIImage *uiimage=MatToUIImage(vins.imageGray);
+	const NSString* correctPathResult=[self httpAsynchronousRequest:uiimage];
+	NSLog(@"wrz correctPathResult %@",correctPathResult);
+	
+	NSRange foundDirecY = [correctPathResult rangeOfString:@"direction_y"];
+	NSRange foundDirecX = [correctPathResult rangeOfString:@"direction_x"];
+	NSRange foundPosiY = [correctPathResult rangeOfString:@"position_y"];
+	NSRange foundPosiX = [correctPathResult rangeOfString:@"position_x"];
+	
+	bool requestOK=true;
+	if(foundDirecY.location==NSNotFound||foundDirecX.location==NSNotFound||foundPosiY.location==NSNotFound||foundPosiX.location==NSNotFound){
+		requestOK=false;
+	}
+	
+	if(requestOK){
+//		NSLog(@"foundDy before %lu,length:%lu",foundDirecY.location,foundDirecY.length);
+//		NSLog(@"foundDX before %lu,length:%lu",foundDirecX.location,foundDirecX.length);
+//		NSLog(@"foundPy before %lu,length:%lu",foundPosiY.location,foundPosiY.length);
+//		NSLog(@"foundPx before %lu,length:%lu",foundPosiX.location,foundPosiX.length);
+		double direction_y_tmp=0.0;
+		double direction_x_tmp=0.0;
+		double position_y_tmp=0.0;
+		double position_x_tmp=0.0;
+		if(foundDirecY.location!=NSNotFound){
+			foundDirecY.location=foundDirecY.location+foundDirecY.length+NSUInteger(2);
+			foundDirecY.length=foundDirecX.location-NSUInteger(2)-foundDirecY.location;
+			if(foundDirecY.length>0){
+				direction_y_tmp =[[correctPathResult substringWithRange:foundDirecY] doubleValue];
+			}
+			else requestOK=false;
+		}
+		if(foundDirecX.location!=NSNotFound){
+			foundDirecX.location=foundDirecX.location+foundDirecX.length+NSUInteger(2);
+			foundDirecX.length=foundPosiY.location-NSUInteger(2)-foundDirecX.location;
+			if(foundDirecX.length>0){
+				direction_x_tmp =[[correctPathResult substringWithRange:foundDirecX] doubleValue];
+			}
+			else requestOK=false;
+		}
+		if(foundPosiY.location!=NSNotFound){
+			foundPosiY.location=foundPosiY.location+foundPosiY.length+NSUInteger(2);
+			foundPosiY.length=foundPosiX.location-NSUInteger(2)-foundPosiY.location;
+			if(foundPosiY.length>0){
+				position_y_tmp =[[correctPathResult substringWithRange:foundPosiY] doubleValue];
+			}
+			else requestOK=false;
+		}
+		if(foundPosiX.location!=NSNotFound){
+			foundPosiX.location=foundPosiX.location+foundPosiX.length+NSUInteger(2);
+			foundPosiX.length=[correctPathResult length]-NSUInteger(1)-foundPosiX.location;
+			if(foundPosiX.length>0){
+				position_x_tmp =[[correctPathResult substringWithRange:foundPosiX] doubleValue];
+			}
+			else requestOK=false;
+		}
+		if(direction_x==0&&direction_y==0&&position_x==0&&position_y==0)requestOK=false;
+		if(requestOK){
+			direction_y=(direction_y_tmp/Height_2D_Map_pixel)*Height_2D_Map_m;
+			direction_x=(direction_x_tmp/Width_2D_Map_pixel)*Width_2D_Map_m;
+			position_y=(position_y_tmp/Height_2D_Map_pixel)*Height_2D_Map_m;
+			position_x=(position_x_tmp/Width_2D_Map_pixel)*Width_2D_Map_m;
+		}
+		
+		
+	}
+	return requestOK;
+
+}
 - (IBAction)correctPath:(UIButton *)sender {
 	NSLog(@"correct path!");
-	//send image to server
-	//UIImage *uiimage=MatToUIImage(vins.imageGray);
-	//[self httpAsynchronousRequest:uiimage];
-	vins.correctFlag=true;
-	vins.curTruthPosIndex=WINDOW_SIZE-1;
-	vins.curTruthPos.x()=lateast_P.x();
-	vins.curTruthPos.y()=lateast_P.y()-1.0;
-	vins.curTruthPos.z()=lateast_P.z();
-	printf("latest_P:%f, %f, %f",lateast_P.x(),lateast_P.y(),lateast_P.z());
+	if(vins.hasInitialP0){
+		double direction_y=0.0;
+		double direction_x=0.0;
+		double position_y=0.0;
+		double position_x=0.0;
+		if([self requstTruthPos:direction_y requestDx:direction_x requestPy:position_y requestPx:position_x]){
+			NSLog(@"wrz dy:%f, dx:%f, py:%f, px:%f",direction_y,direction_x,position_y,position_x);
+			vins.correctFlag=true;
+			vins.curTruthPosIndex=WINDOW_SIZE-1;
+			vins.curTruthPos.x()=lateast_P.x();
+			vins.curTruthPos.y()=lateast_P.y()-1.0;
+			vins.curTruthPos.z()=lateast_P.z();
+			printf("latest_P:%f, %f, %f,direction:%d\n",lateast_P.x(),lateast_P.y(),lateast_P.z(),direction_y);
+		}
+		
+		
+	}
+	
+	
+	
 	
 	
 }

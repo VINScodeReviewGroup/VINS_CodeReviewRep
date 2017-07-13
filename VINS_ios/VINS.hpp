@@ -82,7 +82,7 @@ class VINS
     Vector3d Bgs[10 * (WINDOW_SIZE + 1)];
     Vector3d Ps_retrive;
     Quaterniond Qs_retrive;
-    
+	
     double para_Pose[WINDOW_SIZE + 1][SIZE_POSE];
     double para_SpeedBias[WINDOW_SIZE + 1][SIZE_SPEEDBIAS];
     double para_Feature[NUM_OF_F][SIZE_FEATURE];
@@ -154,6 +154,8 @@ class VINS
 	bool correctFlag;
 	Vector3f curTruthPos;
 	int curTruthPosIndex;
+	bool hasInitialP0;
+	bool requestOK;
 	
     enum InitStatus
     {

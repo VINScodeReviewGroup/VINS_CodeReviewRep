@@ -27,6 +27,8 @@ failure_hand{false},
 	correctFlag=false;
 	curTruthPos.setZero();
 	curTruthPosIndex=WINDOW_SIZE-1;
+	hasInitialP0=false;
+	requestOK=false;
 }
 
 void VINS::setIMUModel()
