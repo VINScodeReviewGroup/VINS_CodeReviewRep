@@ -61,6 +61,7 @@
 		8AEB6B421E77C0FA00F9F3EE /* VocabularyBinary.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 8AEB6B3F1E77C0FA00F9F3EE /* VocabularyBinary.cpp */; };
 		8AEB6B431E77C0FA00F9F3EE /* VocabularyBinary.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 8AEB6B401E77C0FA00F9F3EE /* VocabularyBinary.hpp */; };
 		8AF3BDB21E6C08B3009A1FEC /* opencv2.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C22203881E67072B00B48629 /* opencv2.framework */; };
+		B32DBE9C1F18BE56007E731B /* Thumbnail.m in Sources */ = {isa = PBXBuildFile; fileRef = B32DBE9B1F18BE56007E731B /* Thumbnail.m */; };
 		C222033F1E66E0FA00B48629 /* Timestamp.cpp in Sources */ = {isa = PBXBuildFile; fileRef = C222032A1E66E0FA00B48629 /* Timestamp.cpp */; };
 		C22203461E66E0FA00B48629 /* Random.cpp in Sources */ = {isa = PBXBuildFile; fileRef = C22203381E66E0FA00B48629 /* Random.cpp */; };
 		C22203651E66E1B100B48629 /* BRIEF.cpp in Sources */ = {isa = PBXBuildFile; fileRef = C222034E1E66E1B100B48629 /* BRIEF.cpp */; };
@@ -142,6 +143,8 @@
 		8AE0E4621E7E5C7B0082912B /* CameraUtils.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = CameraUtils.m; sourceTree = "<group>"; };
 		8AEB6B3F1E77C0FA00F9F3EE /* VocabularyBinary.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = VocabularyBinary.cpp; path = loop/VocabularyBinary.cpp; sourceTree = "<group>"; };
 		8AEB6B401E77C0FA00F9F3EE /* VocabularyBinary.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = VocabularyBinary.hpp; path = loop/VocabularyBinary.hpp; sourceTree = "<group>"; };
+		B32DBE9A1F18BE1A007E731B /* Thumbnail.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Thumbnail.h; sourceTree = "<group>"; };
+		B32DBE9B1F18BE56007E731B /* Thumbnail.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = Thumbnail.m; sourceTree = "<group>"; };
 		C22203251E66E0FA00B48629 /* DException.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = DException.h; path = ThirdParty/DUtils/DException.h; sourceTree = SOURCE_ROOT; };
 		C22203261E66E0FA00B48629 /* DUtils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = DUtils.h; path = ThirdParty/DUtils/DUtils.h; sourceTree = SOURCE_ROOT; };
 		C222032A1E66E0FA00B48629 /* Timestamp.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Timestamp.cpp; path = ThirdParty/DUtils/Timestamp.cpp; sourceTree = SOURCE_ROOT; };
@@ -475,6 +478,8 @@
 				C2B5373F1DB6491D00E235BC /* Supporting Files */,
 				8AE0E4611E7E5C7B0082912B /* CameraUtils.h */,
 				8AE0E4621E7E5C7B0082912B /* CameraUtils.m */,
+				B32DBE9A1F18BE1A007E731B /* Thumbnail.h */,
+				B32DBE9B1F18BE56007E731B /* Thumbnail.m */,
 			);
 			path = VINS_ios;
 			sourceTree = "<group>";
@@ -782,6 +787,7 @@
 				C2B5379E1DB8812C00E235BC /* feature_manager.cpp in Sources */,
 				C2B537471DB6491D00E235BC /* ViewController.mm in Sources */,
 				C2442F911EBE137600008A26 /* delaunay.cpp in Sources */,
+				B32DBE9C1F18BE56007E731B /* Thumbnail.m in Sources */,
 				C2B537441DB6491D00E235BC /* AppDelegate.m in Sources */,
 				8AEB6B411E77C0FA00F9F3EE /* VocabularyBinary.cpp in Sources */,
 				C2B537901DB64EA100E235BC /* feature_tracker.cpp in Sources */,
