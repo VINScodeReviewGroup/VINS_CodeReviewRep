@@ -148,10 +148,25 @@ float y_view_last = -5000;
 float z_view_last = -5000;
 float total_odom = 0;
 
+//缩略图上绘制点的图层
+//使用方法：设置x、y坐标，更新绘制图层
+//[view setPixelX:i];
+//[view setPixelY:j];
+//[view setNeedsDisplay];
+ThumbnailView *view;
+
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    
+
+	/*******************************************缩略图上绘制点的图层*******************************************/
+	
+	CGRect  viewRect = CGRectMake(358, 256, 128, 108);
+	 view = [[ThumbnailView alloc] initWithFrame:viewRect];
+	[view setBackgroundColor:[UIColor clearColor]];
+	
+	
+
     /*******************************************Camera setup*******************************************/
 #if VINS_FRAMEWORK
     self.videoCamera = [[CvVideoCamera alloc] init];
