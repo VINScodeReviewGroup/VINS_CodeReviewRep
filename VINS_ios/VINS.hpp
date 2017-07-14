@@ -156,6 +156,14 @@ class VINS
 	int curTruthPosIndex;
 	bool hasInitialP0;
 	bool requestOK;
+	Matrix2f Rwc_vinsTo2Dmap;
+	Vector2f wTcw_vinsTo2Dmap;
+	Matrix2f Rcw_2DmapTovins;
+	Vector2f cTwc_2DmapTovins;
+	Vector2i curPosIn2Dmap_pixel;
+	Vector2f curPosIn2Dmap_m;
+	Vector2f initForwardDirecIn2Dmap;
+	
 	
     enum InitStatus
     {

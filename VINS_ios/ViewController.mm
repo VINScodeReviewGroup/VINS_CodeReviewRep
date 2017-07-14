@@ -9,6 +9,7 @@
 #import "ViewController.h"
 #import "utility.hpp"
 #import "CameraUtils.h"
+#import "Thumbnail.h"
 
 #if VINS_FRAMEWORK
 //#import "VINSUnityAPI.h"
@@ -155,18 +156,19 @@ float total_odom = 0;
 //[view setNeedsDisplay];
 ThumbnailView *view;
 
-
 - (void)viewDidLoad {
     [super viewDidLoad];
-
+	
 	/*******************************************缩略图上绘制点的图层*******************************************/
 	
-	CGRect  viewRect = CGRectMake(358, 256, 128, 108);
-	 view = [[ThumbnailView alloc] initWithFrame:viewRect];
-	[view setBackgroundColor:[UIColor clearColor]];
+	CGRect  viewRect = CGRectMake(306, 224, 128, 108);
+	view = [[ThumbnailView alloc] initWithFrame:viewRect];
+//	[view setBackgroundColor:[UIColor clearColor]];
 	
+	[view setOpaque:NO];
+ 
+	[self.view addSubview:view];
 	
-
     /*******************************************Camera setup*******************************************/
 #if VINS_FRAMEWORK
     self.videoCamera = [[CvVideoCamera alloc] init];
@@ -368,6 +370,25 @@ ThumbnailView *view;
 	return resultStr;
  
 }
+
+void dispPosIn2Dmap(){
+	NSLog(@"display current position in 2D map");
+	if(vins.hasInitialP0){
+		Vector2f curPosInVins(lateast_P.x(),lateast_P.y());
+		Vector2f curPosIn2Dmap_m=vins.Rwc_vinsTo2Dmap*curPosInVins+vins.wTcw_vinsTo2Dmap;
+		Vector2i curPosIn2Dmap_pixel;
+		curPosIn2Dmap_pixel.x()=int(curPosIn2Dmap_m.x()/Width_2D_Map_m*Width_2D_Map_pixel);
+		curPosIn2Dmap_pixel.y()=int(curPosIn2Dmap_m.y()/Height_2D_Map_m*Height_2D_Map_pixel);
+		bool isIn2Dmap=true;
+		if(curPosIn2Dmap_pixel.x()>Width_2D_Map_pixel||curPosIn2Dmap_pixel.y()>Height_2D_Map_pixel)
+			isIn2Dmap=false;
+		if(isIn2Dmap){
+			vins.curPosIn2Dmap_m=curPosIn2Dmap_m;
+			vins.curPosIn2Dmap_pixel=curPosIn2Dmap_pixel;
+		}
+	}
+}
+
 
 /*
  Main process image thread: this thread detects and track feature between two continuous images
@@ -605,6 +626,7 @@ bool vins_updated = false;
 					//vins.drawresult.drawArrowAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
 					//vins.drawresult.drawFixedArrowWithCameraAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
 					vins.drawresult.drawArrowTowardFixedPointAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
+					dispPosIn2Dmap();
 					
                     vins_updated = false;
                     
@@ -751,6 +773,8 @@ void update()
     gyr_0 = vins.gyr_0;
     //printf("predict update: x = %.3f, y = %.3f z = %.3f\n",tmp_P(0),tmp_P(1),tmp_P(2));
 }
+
+
 
 /*
  VINS thread: this thread tightly fuses the visual measurements and imu data and solves pose, velocity, IMU bias, 3D feature for all frame in WINNDOW
@@ -1330,10 +1354,18 @@ vector<IMU_MSG> gyro_buf;  // for Interpolation
             finish_init = true;
         }
         
-        float x_view = (float)vins.correct_Ps[frame_cnt][0];
-        float y_view = (float)vins.correct_Ps[frame_cnt][1];
-        float z_view = (float)vins.correct_Ps[frame_cnt][2];
-        if(x_view_last == -5000)
+//        float x_view = (float)vins.correct_Ps[frame_cnt][0];
+//        float y_view = (float)vins.correct_Ps[frame_cnt][1];
+//        float z_view = (float)vins.correct_Ps[frame_cnt][2];
+		//wrz
+//		float x_view=(float)vins.curPosIn2Dmap_m.x();
+//		float y_view=(float)vins.curPosIn2Dmap_m.y();
+//		float x_view=(float)vins.curPosIn2Dmap_pixel.x();
+//		float y_view=(float)vins.curPosIn2Dmap_pixel.y();
+		float x_view=(float)vins.curTruthPos.x()/Width_2D_Map_m*Width_2D_Map_pixel;
+		float y_view=(float)vins.curTruthPos.y()/Height_2D_Map_m*Height_2D_Map_pixel;
+		float z_view=(float)vins.initForwardDirecIn2Dmap.x();
+		if(x_view_last == -5000)
         {
             x_view_last = x_view;
             y_view_last = y_view;
@@ -1354,10 +1386,11 @@ vector<IMU_MSG> gyro_buf;  // for Interpolation
         [_total_odom_label setText:stringView];
         stringView = [NSString stringWithFormat:@"Y:%.2f",y_view];
         [_Y_label setText:stringView];
-        stringView = [NSString stringWithFormat:@"Z:%.2f",z_view];
+        stringView = [NSString stringWithFormat:@"dx:%.2f",z_view];
         [_Z_label setText:stringView];
     }
-    stringView = [NSString stringWithFormat:@"BUF:%d",waiting_lists];
+	float dyIn2Dmap=vins.initForwardDirecIn2Dmap.y();
+    stringView = [NSString stringWithFormat:@"dy:%.2f",dyIn2Dmap];
     [_buf_label setText:stringView];
     //NSString *stringZ = [NSString stringWithFormat:@"Z:%.2f",z_view, vins.f_manager.getFeatureCount()];
     if(old_index != -1)
@@ -1609,15 +1642,49 @@ bool start_active = true;
     
 }
 
+- (IBAction)updatePosIn2Dmap:(UIButton *)sender {
+//	int curPosX_2Dmap=vins.curPosIn2Dmap_pixel.x();
+//	int curPosY_2Dmap=vins.curPosIn2Dmap_pixel.y();
+	int curPosX_2Dmap=vins.curTruthPos.x()/Width_2D_Map_m*Width_2D_Map_pixel;
+	int curPosY_2Dmap=vins.curTruthPos.y()/Height_2D_Map_m*Height_2D_Map_pixel;
+	printf("wrz40 curPosX:%u, curPosY:%u\n",curPosX_2Dmap,curPosY_2Dmap);
+	[view setPixelX:curPosX_2Dmap];
+	[view setPixelY:curPosY_2Dmap];
+	//					[view setPixelX:10];
+	//					[view setPixelY:10];
+	[view setNeedsDisplay];
+}
+
+
 - (IBAction)getInitPoseInMap:(UIButton *)sender {
-	NSLog(@"initial P0 in 2D map");
+	NSLog(@"initial transformation from vins to 2Dmap");
 	
 	double direction_y=0.0;
 	double direction_x=0.0;
 	double position_y=lateast_P.y();
 	double position_x=lateast_P.x();
 	if([self requstTruthPos:direction_y requestDx:direction_x requestPy:position_y requestPx:position_x]){
-		NSLog(@"wrz initialP0 dy:%f, dx:%f, py:%f, px:%f",direction_y,direction_x,position_y,position_x);
+		NSLog(@"wrz0 initialP0 dy:%f, dx:%f, py:%f, px:%f",direction_y,direction_x,position_y,position_x);
+		//计算从vins到2D平面图间的转换关系
+		Vector3f vins_xAxisIn2Dmap(direction_x,direction_y,0.0);
+		vins_xAxisIn2Dmap=vins_xAxisIn2Dmap/vins_xAxisIn2Dmap.norm();
+		Vector3f vins_zAxisIn2Dmap(0.0,0.0,1.0);
+		Vector3f vins_yAxisIn2Dmap=vins_zAxisIn2Dmap.cross(vins_xAxisIn2Dmap);
+		vins_yAxisIn2Dmap=vins_yAxisIn2Dmap/vins_yAxisIn2Dmap.norm();
+		Vector2f T_vinsTo2Dmap(position_x,position_y);
+		vins.Rwc_vinsTo2Dmap.block<2, 1>(0, 0)=vins_xAxisIn2Dmap.block<2, 1>(0, 0);
+		vins.Rwc_vinsTo2Dmap.block<2, 1>(0, 1)=vins_yAxisIn2Dmap.block<2, 1>(0, 0);
+		vins.wTcw_vinsTo2Dmap=T_vinsTo2Dmap;
+		//计算从2D平面图到vins间的转换关系
+		vins.Rcw_2DmapTovins=vins.Rwc_vinsTo2Dmap.transpose();
+		vins.cTwc_2DmapTovins=-vins.Rwc_vinsTo2Dmap.transpose()*vins.wTcw_vinsTo2Dmap;
+		//记录初始相机朝向在平面图的方向
+		vins.initForwardDirecIn2Dmap.x()=direction_x;
+		vins.initForwardDirecIn2Dmap.y()=direction_y;
+		
+//		printf("wrz01 x0:%f, x1:%f, y0:%f, y1:%f,t0Tmp:%f, t1Tmp:%f\n",vins_xAxisIn2Dmap.x(),vins_xAxisIn2Dmap.y(),vins_yAxisIn2Dmap.x(),vins_yAxisIn2Dmap.y(),position_x,position_y);
+		printf("wrz01 x0:%f, x1:%f, y0:%f, y1:%f, t0:%f, t1:%f\n",vins.Rwc_vinsTo2Dmap(0,0),vins.Rwc_vinsTo2Dmap(1,0),vins.Rwc_vinsTo2Dmap(0,1),vins.Rwc_vinsTo2Dmap(1,1),vins.wTcw_vinsTo2Dmap.x(),vins.wTcw_vinsTo2Dmap.y());
+		printf("wrz010 x0:%f, x1:%f, y0:%f, y1:%f, t0:%f, t1:%f\n",vins.Rcw_2DmapTovins(0,0),vins.Rcw_2DmapTovins(1,0),vins.Rcw_2DmapTovins(0,1),vins.Rcw_2DmapTovins(1,1),vins.cTwc_2DmapTovins.x(),vins.cTwc_2DmapTovins.y());
 		vins.hasInitialP0=true;
 	}
 }
@@ -1627,18 +1694,19 @@ bool start_active = true;
 	NSLog(@"request true positon from server");
 	//send image to server
 	UIImage *uiimage=MatToUIImage(vins.imageGray);
-	const NSString* correctPathResult=[self httpAsynchronousRequest:uiimage];
-	NSLog(@"wrz correctPathResult %@",correctPathResult);
-	
-	NSRange foundDirecY = [correctPathResult rangeOfString:@"direction_y"];
-	NSRange foundDirecX = [correctPathResult rangeOfString:@"direction_x"];
-	NSRange foundPosiY = [correctPathResult rangeOfString:@"position_y"];
-	NSRange foundPosiX = [correctPathResult rangeOfString:@"position_x"];
+	const NSString* requestTruePathResult=[self httpAsynchronousRequest:uiimage];
+	NSLog(@"wrz requestTruePathResult %@",requestTruePathResult);
+	//解析出在2D平面图上的方位和坐标
+	NSRange foundDirecY = [requestTruePathResult rangeOfString:@"direction_y"];
+	NSRange foundDirecX = [requestTruePathResult rangeOfString:@"direction_x"];
+	NSRange foundPosiY = [requestTruePathResult rangeOfString:@"position_y"];
+	NSRange foundPosiX = [requestTruePathResult rangeOfString:@"position_x"];
 	
 	bool requestOK=true;
 	if(foundDirecY.location==NSNotFound||foundDirecX.location==NSNotFound||foundPosiY.location==NSNotFound||foundPosiX.location==NSNotFound){
 		requestOK=false;
 	}
+	if(!requestOK)printf("wrz request fail 0\n");
 	
 	if(requestOK){
 //		NSLog(@"foundDy before %lu,length:%lu",foundDirecY.location,foundDirecY.length);
@@ -1653,38 +1721,47 @@ bool start_active = true;
 			foundDirecY.location=foundDirecY.location+foundDirecY.length+NSUInteger(2);
 			foundDirecY.length=foundDirecX.location-NSUInteger(2)-foundDirecY.location;
 			if(foundDirecY.length>0){
-				direction_y_tmp =[[correctPathResult substringWithRange:foundDirecY] doubleValue];
+				direction_y_tmp =[[requestTruePathResult substringWithRange:foundDirecY] doubleValue];
 			}
 			else requestOK=false;
+			if(!requestOK)printf("wrz request fail 1\n");
 		}
 		if(foundDirecX.location!=NSNotFound){
 			foundDirecX.location=foundDirecX.location+foundDirecX.length+NSUInteger(2);
 			foundDirecX.length=foundPosiY.location-NSUInteger(2)-foundDirecX.location;
 			if(foundDirecX.length>0){
-				direction_x_tmp =[[correctPathResult substringWithRange:foundDirecX] doubleValue];
+				direction_x_tmp =[[requestTruePathResult substringWithRange:foundDirecX] doubleValue];
 			}
 			else requestOK=false;
+			if(!requestOK)printf("wrz request fail 2\n");
 		}
 		if(foundPosiY.location!=NSNotFound){
 			foundPosiY.location=foundPosiY.location+foundPosiY.length+NSUInteger(2);
 			foundPosiY.length=foundPosiX.location-NSUInteger(2)-foundPosiY.location;
 			if(foundPosiY.length>0){
-				position_y_tmp =[[correctPathResult substringWithRange:foundPosiY] doubleValue];
+				position_y_tmp =[[requestTruePathResult substringWithRange:foundPosiY] doubleValue];
 			}
 			else requestOK=false;
+			if(!requestOK)printf("wrz request fail 3\n");
 		}
 		if(foundPosiX.location!=NSNotFound){
 			foundPosiX.location=foundPosiX.location+foundPosiX.length+NSUInteger(2);
-			foundPosiX.length=[correctPathResult length]-NSUInteger(1)-foundPosiX.location;
+			foundPosiX.length=[requestTruePathResult length]-NSUInteger(1)-foundPosiX.location;
 			if(foundPosiX.length>0){
-				position_x_tmp =[[correctPathResult substringWithRange:foundPosiX] doubleValue];
+				position_x_tmp =[[requestTruePathResult substringWithRange:foundPosiX] doubleValue];
 			}
 			else requestOK=false;
+			if(!requestOK)printf("wrz request fail 4\n");
 		}
-		if(direction_x==0&&direction_y==0&&position_x==0&&position_y==0)requestOK=false;
+		if(direction_x_tmp==0&&direction_y_tmp==0&&position_x_tmp==0&&position_y_tmp==0)requestOK=false;
+		
+		if(!requestOK)printf("wrz request fail 5\n");
+		
+		NSLog(@"wrz dy:%f, dx:%f, py:%f, px:%f",direction_y_tmp,direction_x_tmp,position_y_tmp,position_x_tmp);
+		
 		if(requestOK){
-			direction_y=(direction_y_tmp/Height_2D_Map_pixel)*Height_2D_Map_m;
-			direction_x=(direction_x_tmp/Width_2D_Map_pixel)*Width_2D_Map_m;
+			direction_y=((direction_y_tmp-position_y_tmp)/Height_2D_Map_pixel)*Height_2D_Map_m;
+			direction_x=((direction_x_tmp-position_x_tmp)/Width_2D_Map_pixel)*Width_2D_Map_m;
 			position_y=(position_y_tmp/Height_2D_Map_pixel)*Height_2D_Map_m;
 			position_x=(position_x_tmp/Width_2D_Map_pixel)*Width_2D_Map_m;
 		}
@@ -1694,6 +1771,7 @@ bool start_active = true;
 	return requestOK;
 
 }
+
 - (IBAction)correctPath:(UIButton *)sender {
 	NSLog(@"correct path!");
 	if(vins.hasInitialP0){
@@ -1701,21 +1779,32 @@ bool start_active = true;
 		double direction_x=0.0;
 		double position_y=0.0;
 		double position_x=0.0;
+		//从server端获取在2D平面图上的坐标和方位，并转换到vins坐标系中
 		if([self requstTruthPos:direction_y requestDx:direction_x requestPy:position_y requestPx:position_x]){
-			NSLog(@"wrz dy:%f, dx:%f, py:%f, px:%f",direction_y,direction_x,position_y,position_x);
-			vins.correctFlag=true;
+			NSLog(@"wrz02 dy:%f, dx:%f, py:%f, px:%f",direction_y,direction_x,position_y,position_x);
+			Vector2f posIn2Dmap(position_x,position_y);
+			Vector2f posInVins=vins.Rcw_2DmapTovins*posIn2Dmap+vins.cTwc_2DmapTovins;
+			
 			vins.curTruthPosIndex=WINDOW_SIZE-1;
-			vins.curTruthPos.x()=lateast_P.x();
-			vins.curTruthPos.y()=lateast_P.y()-1.0;
+//			vins.curTruthPos.x()=posInVins.x();
+//			vins.curTruthPos.y()=posInVins.y();
+			vins.curTruthPos.x()=position_x;
+			vins.curTruthPos.y()=position_y;
 			vins.curTruthPos.z()=lateast_P.z();
+			vins.correctFlag=false;
+			
+			printf("wrz02 xvins:%f, yvins:%f, x2D:%f, y2D:%f\n",posInVins.x(),posInVins.y(), posIn2Dmap.x(),posIn2Dmap.y());
 			printf("latest_P:%f, %f, %f,direction:%d\n",lateast_P.x(),lateast_P.y(),lateast_P.z(),direction_y);
+		}
+		else{
+			printf("wrz02 request failed\n");
 		}
 		
 		
 	}
-	
-	
-	
+	else{
+		printf("wrz02 no initialP0\n");
+	}
 	
 	
 }

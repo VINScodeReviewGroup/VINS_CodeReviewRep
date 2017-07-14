@@ -29,6 +29,13 @@ failure_hand{false},
 	curTruthPosIndex=WINDOW_SIZE-1;
 	hasInitialP0=false;
 	requestOK=false;
+	Rwc_vinsTo2Dmap.setIdentity();
+	wTcw_vinsTo2Dmap.setZero();
+	Rcw_2DmapTovins.setIdentity();
+	cTwc_2DmapTovins.setZero();
+	curPosIn2Dmap_pixel.setZero();
+	curPosIn2Dmap_m.setZero();
+	initForwardDirecIn2Dmap.setZero();
 }
 
 void VINS::setIMUModel()
