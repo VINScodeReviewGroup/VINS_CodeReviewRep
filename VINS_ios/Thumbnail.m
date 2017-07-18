@@ -35,12 +35,12 @@ const int height = 2500;
 }
 
 - (void) setPixelX:(int)pixel_x{
-	pos_x = 1.0 * pixel_x /width * 148;
+	pos_x = 1.0 * pixel_x /width * 156;
 	
 }
 
 - (void) setPixelY:(int)pixel_y{
-	pos_y = 1.0 * pixel_y / height * 125;
+	pos_y = 1.0 * pixel_y / height * 132;
 }
 
 

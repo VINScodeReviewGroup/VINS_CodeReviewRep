@@ -29,8 +29,9 @@
 #endif
 
 //wrz
-#define Width_2D_Map_m (1.42*24.5/0.7)
-#define Height_2D_Map_m ((1.42*24.5/0.7)*(2500.0/2960.0))
+//#define Width_2D_Map_m (1.42*24.5/0.7)
+#define Width_2D_Map_m (2960*1.53/65.0)
+#define Height_2D_Map_m ((2960*1.53/65.0)*(2500.0/2960.0))
 #define Width_2D_Map_pixel 2960.0
 #define Height_2D_Map_pixel 2500.0
 
@@ -161,7 +162,7 @@ ThumbnailView *view;
 	
 	/*******************************************缩略图上绘制点的图层*******************************************/
 	
-	CGRect  viewRect = CGRectMake(306, 224, 128, 108);
+	CGRect  viewRect = CGRectMake(333, 236, 156, 132);
 	view = [[ThumbnailView alloc] initWithFrame:viewRect];
 //	[view setBackgroundColor:[UIColor clearColor]];
 	
@@ -386,6 +387,11 @@ void dispPosIn2Dmap(){
 			vins.curPosIn2Dmap_m=curPosIn2Dmap_m;
 			vins.curPosIn2Dmap_pixel=curPosIn2Dmap_pixel;
 		}
+		printf("wrz05 x0:%f, x1:%f, y0:%f, y1:%f, t0:%f, t1:%f, px:%f, py:%f\n",vins.Rwc_vinsTo2Dmap(0,0),vins.Rwc_vinsTo2Dmap(1,0),vins.Rwc_vinsTo2Dmap(0,1),vins.Rwc_vinsTo2Dmap(1,1),vins.wTcw_vinsTo2Dmap.x(),vins.wTcw_vinsTo2Dmap.y(),curPosInVins.x(),curPosInVins.y());
+
+	}
+	else{
+		printf("wrz05 has no initP0\n");
 	}
 }
 
@@ -625,7 +631,8 @@ bool vins_updated = false;
                     //vins.drawresult.drawAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
 					//vins.drawresult.drawArrowAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
 					//vins.drawresult.drawFixedArrowWithCameraAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
-					vins.drawresult.drawArrowTowardFixedPointAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
+					//vins.drawresult.drawArrowTowardFixedPointAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
+					vins.drawresult.drawArrowFllowedByPath(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated,vins.vinsDestPath);
 					dispPosIn2Dmap();
 					
                     vins_updated = false;
@@ -654,6 +661,7 @@ bool vins_updated = false;
         }
         else //show VINS
         {
+			dispPosIn2Dmap();
 			if(vins.solver_flag == VINS::NON_LINEAR)
             {
                 vins.drawresult.pose.clear();
@@ -822,6 +830,7 @@ bool start_global_optimization = false;
         TS(process_image);
 		//对当前帧点云数据进行处理，首先计算当前帧平均视差判断当前帧是否可为关键帧；然后如果当前帧为初始化帧，则进行初始化；如果不是则进行常规的三角化->优化sliding windows->更新回环检测状态
         vins.processImage(image,header,waiting_lists);
+		
         TE(process_image);
         double time_now = [[NSProcessInfo processInfo] systemUptime];
         double time_vins = vins.Headers[WINDOW_SIZE];
@@ -1360,10 +1369,10 @@ vector<IMU_MSG> gyro_buf;  // for Interpolation
 		//wrz
 //		float x_view=(float)vins.curPosIn2Dmap_m.x();
 //		float y_view=(float)vins.curPosIn2Dmap_m.y();
-//		float x_view=(float)vins.curPosIn2Dmap_pixel.x();
-//		float y_view=(float)vins.curPosIn2Dmap_pixel.y();
-		float x_view=(float)vins.curTruthPos.x()/Width_2D_Map_m*Width_2D_Map_pixel;
-		float y_view=(float)vins.curTruthPos.y()/Height_2D_Map_m*Height_2D_Map_pixel;
+		float x_view=(float)vins.curPosIn2Dmap_pixel.x();
+		float y_view=(float)vins.curPosIn2Dmap_pixel.y();
+//		float x_view=(float)vins.curTruthPos.x()/Width_2D_Map_m*Width_2D_Map_pixel;
+//		float y_view=(float)vins.curTruthPos.y()/Height_2D_Map_m*Height_2D_Map_pixel;
 		float z_view=(float)vins.initForwardDirecIn2Dmap.x();
 		if(x_view_last == -5000)
         {
@@ -1380,7 +1389,8 @@ vector<IMU_MSG> gyro_buf;  // for Interpolation
         
         stringView = [NSString stringWithFormat:@"X:%.2f",x_view];
         [_X_label setText:stringView];
-        stringView = [NSString stringWithFormat:@"TOTAL:%.2f",total_odom];
+		float z_vins = (float)vins.correct_Ps[frame_cnt][2];
+        stringView = [NSString stringWithFormat:@"z_m:%.2f",z_vins];
         //stringView = [NSString stringWithFormat:@"COST:%.2lf",vins.final_cost];
         //stringView = [NSString stringWithFormat:@"COST: %d, %.2lf",vins.visual_factor_num, vins.visual_cost];
         [_total_odom_label setText:stringView];
@@ -1388,18 +1398,44 @@ vector<IMU_MSG> gyro_buf;  // for Interpolation
         [_Y_label setText:stringView];
         stringView = [NSString stringWithFormat:@"dx:%.2f",z_view];
         [_Z_label setText:stringView];
+		
+		float dyIn2Dmap=vins.initForwardDirecIn2Dmap.y();
+		stringView = [NSString stringWithFormat:@"dy:%.2f",dyIn2Dmap];
+		[_buf_label setText:stringView];
+		
+		float x2D=(float)vins.curTruthPosIn2Dmap_pixel.x();
+		float y2D=(float)vins.curTruthPosIn2Dmap_pixel.y();
+		stringView = [NSString stringWithFormat:@"x2D: %f",x2D];
+		[_loop_label setText:stringView];
+		stringView = [NSString stringWithFormat:@"y2D: %f",y2D];
+		[_feature_label setText:stringView];
+
+		
+		//更新当前位置在平面图上的位置
+		int curPosX_2Dmap=vins.curPosIn2Dmap_pixel.x();
+		int curPosY_2Dmap=vins.curPosIn2Dmap_pixel.y();
+		//	int curPosX_2Dmap=vins.curTruthPos.x()/Width_2D_Map_m*Width_2D_Map_pixel;
+		//	int curPosY_2Dmap=vins.curTruthPos.y()/Height_2D_Map_m*Height_2D_Map_pixel;
+		printf("wrz40 curPosX:%u, curPosY:%u\n",curPosX_2Dmap,curPosY_2Dmap);
+		[view setPixelX:curPosX_2Dmap];
+		[view setPixelY:curPosY_2Dmap];
+		//					[view setPixelX:10];
+		//					[view setPixelY:10];
+		[view setNeedsDisplay];
+
+		
     }
-	float dyIn2Dmap=vins.initForwardDirecIn2Dmap.y();
-    stringView = [NSString stringWithFormat:@"dy:%.2f",dyIn2Dmap];
-    [_buf_label setText:stringView];
+//	float dyIn2Dmap=vins.initForwardDirecIn2Dmap.y();
+//    stringView = [NSString stringWithFormat:@"dy:%.2f",dyIn2Dmap];
+//    [_buf_label setText:stringView];
     //NSString *stringZ = [NSString stringWithFormat:@"Z:%.2f",z_view, vins.f_manager.getFeatureCount()];
-    if(old_index != -1)
-    {
-        stringView = [NSString stringWithFormat:@"LOOP with %d",old_index];
-        [_loop_label setText:stringView];
-    }
-    stringView = [NSString stringWithFormat:@"FEATURE: %d",vins.feature_num];
-    [_feature_label setText:stringView];
+//    if(old_index != -1)
+//    {
+//        stringView = [NSString stringWithFormat:@"LOOP with %d",old_index];
+//        [_loop_label setText:stringView];
+//    }
+//    stringView = [NSString stringWithFormat:@"FEATURE: %d",vins.feature_num];
+//    [_feature_label setText:stringView];
 }
 
 -(void)showOutputImage:(UIImage*)image
@@ -1643,10 +1679,10 @@ bool start_active = true;
 }
 
 - (IBAction)updatePosIn2Dmap:(UIButton *)sender {
-//	int curPosX_2Dmap=vins.curPosIn2Dmap_pixel.x();
-//	int curPosY_2Dmap=vins.curPosIn2Dmap_pixel.y();
-	int curPosX_2Dmap=vins.curTruthPos.x()/Width_2D_Map_m*Width_2D_Map_pixel;
-	int curPosY_2Dmap=vins.curTruthPos.y()/Height_2D_Map_m*Height_2D_Map_pixel;
+	int curPosX_2Dmap=vins.curPosIn2Dmap_pixel.x();
+	int curPosY_2Dmap=vins.curPosIn2Dmap_pixel.y();
+//	int curPosX_2Dmap=vins.curTruthPos.x()/Width_2D_Map_m*Width_2D_Map_pixel;
+//	int curPosY_2Dmap=vins.curTruthPos.y()/Height_2D_Map_m*Height_2D_Map_pixel;
 	printf("wrz40 curPosX:%u, curPosY:%u\n",curPosX_2Dmap,curPosY_2Dmap);
 	[view setPixelX:curPosX_2Dmap];
 	[view setPixelY:curPosY_2Dmap];
@@ -1666,12 +1702,21 @@ bool start_active = true;
 	if([self requstTruthPos:direction_y requestDx:direction_x requestPy:position_y requestPx:position_x]){
 		NSLog(@"wrz0 initialP0 dy:%f, dx:%f, py:%f, px:%f",direction_y,direction_x,position_y,position_x);
 		//计算从vins到2D平面图间的转换关系
-		Vector3f vins_xAxisIn2Dmap(direction_x,direction_y,0.0);
+//		Vector3f vins_xAxisIn2Dmap(direction_x,direction_y,0.0);
+		//for demo
+		Vector3f vins_xAxisIn2Dmap(0,1.0,0.0);
 		vins_xAxisIn2Dmap=vins_xAxisIn2Dmap/vins_xAxisIn2Dmap.norm();
+		//平面图的z轴是垂直朝下的，vins的x轴朝前，y轴朝左，所以vins的y轴在2Dmap的表示为vins的x轴在2Dmap的表示叉乘2Dmap的z轴
 		Vector3f vins_zAxisIn2Dmap(0.0,0.0,1.0);
-		Vector3f vins_yAxisIn2Dmap=vins_zAxisIn2Dmap.cross(vins_xAxisIn2Dmap);
+		Vector3f vins_yAxisIn2Dmap=vins_xAxisIn2Dmap.cross(vins_zAxisIn2Dmap);
 		vins_yAxisIn2Dmap=vins_yAxisIn2Dmap/vins_yAxisIn2Dmap.norm();
-		Vector2f T_vinsTo2Dmap(position_x,position_y);
+//		Vector2f T_vinsTo2Dmap(position_x,position_y);
+		//for demo
+//		float initX2Dmap=(512.0)/Width_2D_Map_pixel*Width_2D_Map_m+1.82;
+//		float initY2Dmap=(760.0)/Height_2D_Map_pixel*Height_2D_Map_m-2.15;
+		float initX2Dmap=(512.0)/Width_2D_Map_pixel*Width_2D_Map_m+2.02;
+		float initY2Dmap=(780.0)/Height_2D_Map_pixel*Height_2D_Map_m-2.80;
+		Vector2f T_vinsTo2Dmap(initX2Dmap,initY2Dmap);
 		vins.Rwc_vinsTo2Dmap.block<2, 1>(0, 0)=vins_xAxisIn2Dmap.block<2, 1>(0, 0);
 		vins.Rwc_vinsTo2Dmap.block<2, 1>(0, 1)=vins_yAxisIn2Dmap.block<2, 1>(0, 0);
 		vins.wTcw_vinsTo2Dmap=T_vinsTo2Dmap;
@@ -1682,10 +1727,45 @@ bool start_active = true;
 		vins.initForwardDirecIn2Dmap.x()=direction_x;
 		vins.initForwardDirecIn2Dmap.y()=direction_y;
 		
+		//设置目标路径
+		vector<Vector2i> pathDestIn2Dmap;
+//		pathDestIn2Dmap.push_back(Vector2i(512,770));
+//		pathDestIn2Dmap.push_back(Vector2i(185,770));
+//		pathDestIn2Dmap.push_back(Vector2i(185,1105));
+//		pathDestIn2Dmap.push_back(Vector2i(512,1105));
+//		pathDestIn2Dmap.push_back(Vector2i(512,770));
+		pathDestIn2Dmap.push_back(Vector2i(680,796));
+		pathDestIn2Dmap.push_back(Vector2i(680,1396));
+		pathDestIn2Dmap.push_back(Vector2i(680,1868));
+		pathDestIn2Dmap.push_back(Vector2i(1684,1868));
+		pathDestIn2Dmap.push_back(Vector2i(1684,1628));
+		
+		int pathDestNum=pathDestIn2Dmap.size();
+		vins.drawresult.pathDestNum=pathDestNum;
+		vins.drawresult.curDestIndex=0;
+		vins.vinsDestPath.clear();
+		for(int i=0;i<pathDestNum;++i){
+			Vector2i tmp_i=pathDestIn2Dmap[i];
+			Vector2f tmp_f;
+			tmp_f.x()=(float)tmp_i.x()/Width_2D_Map_pixel*Width_2D_Map_m;
+			tmp_f.y()=(float)tmp_i.y()/Height_2D_Map_pixel*Height_2D_Map_m;
+			tmp_f=vins.Rcw_2DmapTovins*tmp_f+vins.cTwc_2DmapTovins;
+			Vector3f pathDestInVins;
+			pathDestInVins.x()=tmp_f.x();
+			pathDestInVins.y()=tmp_f.y();
+			pathDestInVins.z()=0.0;
+			vins.vinsDestPath.push_back(pathDestInVins);
+			printf("wrz06 %u destX:%f, destY:%f, destZ:%f\n",i, pathDestInVins.x(),pathDestInVins.y(),pathDestInVins.z());
+			
+		}
+		vins.hasInitialP0=true;
+		
+		
+		
 //		printf("wrz01 x0:%f, x1:%f, y0:%f, y1:%f,t0Tmp:%f, t1Tmp:%f\n",vins_xAxisIn2Dmap.x(),vins_xAxisIn2Dmap.y(),vins_yAxisIn2Dmap.x(),vins_yAxisIn2Dmap.y(),position_x,position_y);
 		printf("wrz01 x0:%f, x1:%f, y0:%f, y1:%f, t0:%f, t1:%f\n",vins.Rwc_vinsTo2Dmap(0,0),vins.Rwc_vinsTo2Dmap(1,0),vins.Rwc_vinsTo2Dmap(0,1),vins.Rwc_vinsTo2Dmap(1,1),vins.wTcw_vinsTo2Dmap.x(),vins.wTcw_vinsTo2Dmap.y());
 		printf("wrz010 x0:%f, x1:%f, y0:%f, y1:%f, t0:%f, t1:%f\n",vins.Rcw_2DmapTovins(0,0),vins.Rcw_2DmapTovins(1,0),vins.Rcw_2DmapTovins(0,1),vins.Rcw_2DmapTovins(1,1),vins.cTwc_2DmapTovins.x(),vins.cTwc_2DmapTovins.y());
-		vins.hasInitialP0=true;
+		
 	}
 }
 
@@ -1786,12 +1866,14 @@ bool start_active = true;
 			Vector2f posInVins=vins.Rcw_2DmapTovins*posIn2Dmap+vins.cTwc_2DmapTovins;
 			
 			vins.curTruthPosIndex=WINDOW_SIZE-1;
-//			vins.curTruthPos.x()=posInVins.x();
-//			vins.curTruthPos.y()=posInVins.y();
-			vins.curTruthPos.x()=position_x;
-			vins.curTruthPos.y()=position_y;
+			vins.curTruthPos.x()=posInVins.x();
+			vins.curTruthPos.y()=posInVins.y();
+//			vins.curTruthPos.x()=position_x;
+//			vins.curTruthPos.y()=position_y;
 			vins.curTruthPos.z()=lateast_P.z();
-			vins.correctFlag=false;
+			vins.curTruthPosIn2Dmap_pixel.x()=position_x/Width_2D_Map_m*Width_2D_Map_pixel;
+			vins.curTruthPosIn2Dmap_pixel.y()=position_y/Height_2D_Map_m*Height_2D_Map_pixel;
+			vins.correctFlag=true;
 			
 			printf("wrz02 xvins:%f, yvins:%f, x2D:%f, y2D:%f\n",posInVins.x(),posInVins.y(), posIn2Dmap.x(),posIn2Dmap.y());
 			printf("latest_P:%f, %f, %f,direction:%d\n",lateast_P.x(),lateast_P.y(),lateast_P.z(),direction_y);

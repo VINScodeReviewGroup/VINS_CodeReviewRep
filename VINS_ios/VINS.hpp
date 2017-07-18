@@ -153,6 +153,7 @@ class VINS
     Matrix3f RcForView;
 	bool correctFlag;
 	Vector3f curTruthPos;
+	Vector2i curTruthPosIn2Dmap_pixel;
 	int curTruthPosIndex;
 	bool hasInitialP0;
 	bool requestOK;
@@ -163,6 +164,8 @@ class VINS
 	Vector2i curPosIn2Dmap_pixel;
 	Vector2f curPosIn2Dmap_m;
 	Vector2f initForwardDirecIn2Dmap;
+	vector<Vector3f> vinsDestPath;
+	
 	
 	
     enum InitStatus

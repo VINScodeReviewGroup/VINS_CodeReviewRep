@@ -144,7 +144,7 @@
                                 </connections>
                             </button>
                             <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" fixedFrame="YES" image="Didi_T1_F4" translatesAutoresizingMaskIntoConstraints="NO" id="Ilq-y2-kfd">
-                                <rect key="frame" x="306" y="224" width="148" height="125"/>
+                                <rect key="frame" x="333" y="236" width="156" height="132"/>
                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
                             </imageView>
                             <button opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="2Sw-EE-JA3">

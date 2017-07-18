@@ -36,6 +36,7 @@ failure_hand{false},
 	curPosIn2Dmap_pixel.setZero();
 	curPosIn2Dmap_m.setZero();
 	initForwardDirecIn2Dmap.setZero();
+	
 }
 
 void VINS::setIMUModel()

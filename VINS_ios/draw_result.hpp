@@ -87,7 +87,13 @@ public:
     
     int Ground_idx;
     
-    
+    //wrz
+	int curDestIndex;
+	int pathDestNum;
+	Vector3f curDest;
+	Vector3f nextDest;
+	
+	
     
     float lengthCube;
     vector<Vector3f> pose;
@@ -130,6 +136,7 @@ public:
 	void drawArrowAR(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update);
 	void drawFixedArrowWithCameraAR(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update);
 	void drawArrowTowardFixedPointAR(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update);
+	void drawArrowFllowedByPath(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update, vector<Vector3f>& vinsPaths);
 
     void drawGround(cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest);
     void drawBox(cv::Mat &result, Vector3f corner_0, Vector3f corner_x, Vector3f corner_y, Vector3f corner_z, float size, Vector3f P_latest, Matrix3f R_latest, bool inAR);
