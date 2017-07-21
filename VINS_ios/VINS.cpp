@@ -432,7 +432,7 @@ void VINS::processImage(map<int, Vector3d> &image_msg, double header, int buf_nu
 
     if(solver_flag == INITIAL)
     {
-		//初始化时的all_image_frame？
+		//all_image_frame存储未完成初始化前所有的图像帧
 		ImageFrame imageframe(image_msg, header);
         imageframe.pre_integration = tmp_pre_integration;
         all_image_frame.insert(make_pair(header, imageframe));
@@ -446,6 +446,7 @@ void VINS::processImage(map<int, Vector3d> &image_msg, double header, int buf_nu
                 return;
             }
             bool result = false;
+			//下次重新初始化必须离前一次初始化不少于0.3s
             if(header - initial_timestamp > 0.3)
             {
                 result = solveInitial();
@@ -462,6 +463,7 @@ void VINS::processImage(map<int, Vector3d> &image_msg, double header, int buf_nu
                     solver_flag = INITIAL;
                     init_status = FAIL_CHECK;
                     fail_times++;
+					//根据margin_flag决定margin当前帧还是margin窗口第一帧
                     slideWindow();
                 }
                 else
@@ -913,7 +915,7 @@ void VINS::solve_ceres(int buf_num)
                 
                 marginalization_info->addResidualBlockInfo(residual_block_info);
             }
-        
+			
             marginalization_info->preMarginalize();
             marginalization_info->marginalize();
             
@@ -992,7 +994,7 @@ bool VINS::solveInitial()
     }
      */
     // global sfm
-	//不是frame_count吗
+	//共有frame_count帧初始帧
     Quaterniond *Q = new Quaterniond[frame_count + 1];
     Vector3d *T = new Vector3d[frame_count + 1];
 	//sfm_tracked_points记录sfm得到的三维点云，每个元素对应每组跟踪的单位特征点的id以及该组特征点序列对应的三角化的三维点坐标
@@ -1043,7 +1045,7 @@ bool VINS::solveInitial()
         initProgress = 50;
     }
     //solve pnp for all frame
-	//sfm全局优化后继续对每帧进行Pnp进一步优化
+	//sfm全局优化后继续对非关键帧进行Pnp解算
     map<double, ImageFrame>::iterator frame_it;
     map<int, Vector3d>::iterator it;
     frame_it = all_image_frame.begin( );
@@ -1056,7 +1058,7 @@ bool VINS::solveInitial()
         {
             cout << "key frame " << i << endl;
             frame_it->second.is_key_frame = true;
-			//将camera坐标系下的位姿转至imu坐标系
+			//将camera坐标系下的姿态转至imu坐标系
             frame_it->second.R = Q[i].toRotationMatrix() * ric.transpose();
             frame_it->second.T = T[i];
             i++;
@@ -1073,7 +1075,7 @@ bool VINS::solveInitial()
         cv::Rodrigues(tmp_r, rvec);
         cv::eigen2cv(P_inital, t);
 		
-		//
+		//关键帧间的帧不是关键帧，但也要Pnp解算出相应位姿
         frame_it->second.is_key_frame = false;
         vector<cv::Point3f> pts_3_vector;
         vector<cv::Point2f> pts_2_vector;
@@ -1122,7 +1124,7 @@ bool VINS::solveInitial()
         MatrixXd T_pnp;
         cv::cv2eigen(t, T_pnp);
         T_pnp = R_pnp * (-T_pnp);
-		//将camera坐标系下的位姿转化为imu坐标系下
+		//将camera坐标系下的姿态转化为imu坐标系下
         frame_it->second.R = R_pnp * ric.transpose();
         frame_it->second.T = T_pnp;
     }
@@ -1231,6 +1233,14 @@ bool VINS::visualInitialAlign()
         Rs[i] = rot_diff * Rs[i];
         Vs[i] = rot_diff * Vs[i];
         init_poses.push_back(Ps[i]);
+		double yawInit=Utility::R2ypr(Rs[i]).x();
+		printf("wrz08 yawInit:%f\n",yawInit);
+		if(abs(yawInit)>10.0)return false;
+//		if(i==frame_count){
+//			if(abs(yawInit)>2.0){
+//				return false;
+//			}
+//		}
     }
     
     return true;
@@ -1294,7 +1304,8 @@ void VINS::slideWindow()
         back_P0 = Ps[0];
         if (frame_count == WINDOW_SIZE)
         {
-            for (int i = 0; i < WINDOW_SIZE; i++)
+			//窗口内除第一帧外均向前滑动一帧
+			for (int i = 0; i < WINDOW_SIZE; i++)
             {
                 Rs[i].swap(Rs[i + 1]);
                 std::swap(pre_integrations[i], pre_integrations[i + 1]);
@@ -1324,7 +1335,7 @@ void VINS::slideWindow()
             dt_buf[WINDOW_SIZE].clear();
             linear_acceleration_buf[WINDOW_SIZE].clear();
             angular_velocity_buf[WINDOW_SIZE].clear();
-            
+            //删除margin后的窗口的第一帧？
             if (solver_flag == INITIAL)
             {
                 double t_0 = Headers[0];
@@ -1333,6 +1344,7 @@ void VINS::slideWindow()
                 delete it_0->second.pre_integration;
                 all_image_frame.erase(all_image_frame.begin(), it_0);
             }
+			//更新特征链的相关信息，如start_frame，三维点深度
             slideWindowOld();
         }
     }
@@ -1340,7 +1352,8 @@ void VINS::slideWindow()
     {
         if (frame_count == WINDOW_SIZE)
         {
-            for (unsigned int i = 0; i < dt_buf[frame_count].size(); i++)
+			//保持当前窗口不变，但需要根据新的帧更新最后第frame_count-1帧的预积分，位姿
+			for (unsigned int i = 0; i < dt_buf[frame_count].size(); i++)
             {
                 double tmp_dt = dt_buf[frame_count][i];
                 Vector3d tmp_linear_acceleration = linear_acceleration_buf[frame_count][i];
@@ -1368,7 +1381,7 @@ void VINS::slideWindow()
             dt_buf[WINDOW_SIZE].clear();
             linear_acceleration_buf[WINDOW_SIZE].clear();
             angular_velocity_buf[WINDOW_SIZE].clear();
-
+			//更新特征链的相关信息，如start_frame，第frame_count的特征
             slideWindowNew();
         }
     }

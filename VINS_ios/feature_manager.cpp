@@ -272,19 +272,22 @@ void FeatureManager::removeBackShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3
     for (auto it = feature.begin(), it_next = feature.begin();
          it != feature.end(); it = it_next)
     {
-        it_next++;
-        
+		//it可能会删除，所以需要保存下一个
+		it_next++;
+        //更新特征链的在窗口中的起始帧，起始帧不是第一帧的序号减1；起始帧为第一帧的序号始终为0，并更新第一帧为下一帧，同时更新三维点深度为下一帧的深度
         if (it->start_frame != 0)
             it->start_frame--;
         else
         {
             Eigen::Vector3d uv_i = it->feature_per_frame[0].point;
+			//删除第一帧，如果特征链长度小于2了，则删除该特征链
             it->feature_per_frame.erase(it->feature_per_frame.begin());
             if (it->feature_per_frame.size() < 2)
                 feature.erase(it);
             else
             {
-                Eigen::Vector3d pts_i = uv_i * it->estimated_depth;
+				//更新三维点的深度
+				Eigen::Vector3d pts_i = uv_i * it->estimated_depth;
                 Eigen::Vector3d w_pts_i = marg_R * pts_i + marg_P;
                 Eigen::Vector3d pts_j = new_R.transpose() * (w_pts_i - new_P);
                 double dep_j = pts_j(2);
@@ -366,7 +369,8 @@ void FeatureManager::clearState()
 
 void FeatureManager::removeBack()
 {
-    for (auto it = feature.begin(), it_next = feature.begin();
+	//不用更新三维点深度
+	for (auto it = feature.begin(), it_next = feature.begin();
          it != feature.end(); it = it_next)
     {
         it_next++;
@@ -392,21 +396,29 @@ void FeatureManager::removeFront(int frame_count)
     for (auto it = feature.begin(), it_next = feature.begin(); it != feature.end(); it = it_next)
     {
         it_next++;
-        
+        //margin当前帧的话，直接将当前帧归为frame_count-1帧的特征；如果起始帧即为当前帧，只需将起始帧序号减1；如果起始帧不是当前帧，则删除原先frame_count-1帧的特征，将当前帧特征作为frame_count-1帧的特征
         if (it->start_frame == frame_count)
         {
-            it->start_frame--;
+			
+			it->start_frame--;
         }
         else
         {
-            int j = WINDOW_SIZE - 1 - it->start_frame;
-            //it->feature_per_frame.erase(it->feature_per_frame.begin() + j);
-            if(it->feature_per_frame.size() == j+2)
+			//j+2为特征链长度，it->start_frame+j为第frame_count-1帧
+			int j = WINDOW_SIZE - 1 - it->start_frame;
+			
+			//it->feature_per_frame.erase(it->feature_per_frame.begin() + j);
+			if(it->feature_per_frame.size() == j+2){
+				printf("wrz 070 remove front, start:%u, cur:%u, erase:%u\n",it->start_frame,it->feature_per_frame.size()+it->start_frame-1,it->start_frame+j);
                 it->feature_per_frame.erase(it->feature_per_frame.begin() + j);
+				
+			}
             if (it->feature_per_frame.size() == 0)
             {
-                feature.erase(it);
-                //printf("remove front\n");
+				printf("wrz 071 remove front, start:%u, cur:%u, erase:%u\n",it->start_frame,it->feature_per_frame.size()+it->start_frame-1,it->start_frame+j);
+				feature.erase(it);
+				
+				
             }
             
         }

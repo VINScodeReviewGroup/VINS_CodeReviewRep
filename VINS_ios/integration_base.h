@@ -46,16 +46,22 @@ public:
     
     void repropagate(const Eigen::Vector3d &_linearized_ba, const Eigen::Vector3d &_linearized_bg)
     {
-        sum_dt = 0.0;
+		//相邻两帧之间的时间间隔
+		sum_dt = 0.0;
+		//预积分的线性点，即第一帧对应的测量值
         acc_0 = linearized_acc;
         gyr_0 = linearized_gyr;
+		//p,q,v预积分值
         delta_p.setZero();
         delta_q.setIdentity();
         delta_v.setZero();
+		//加速度，陀螺仪bias，相邻两帧之间bias恒定
         linearized_ba = _linearized_ba;
         linearized_bg = _linearized_bg;
+		//预积分的雅克比以及方差矩阵
         jacobian.setIdentity();
         covariance.setZero();
+		//相邻两帧之间的所有Imu测量数值
         for (int i = 0; i < static_cast<int>(dt_buf.size()); i++)
             propagate(dt_buf[i], acc_buf[i], gyr_buf[i]);
     }

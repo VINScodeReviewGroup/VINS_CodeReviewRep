@@ -395,6 +395,19 @@ void dispPosIn2Dmap(){
 	}
 }
 
+void setVinsPath(){
+	NSLog(@"set vins path");
+	if(!vins.drawresult.hasSetPath and vins.drawresult.hasInitialPlane and vins.drawresult.tapFlag){
+		
+		vins.vinsDestPath.push_back(lateast_P);
+		if(vins.vinsDestPath.size()>=4){
+			vins.drawresult.hasSetPath=true;
+			vins.drawresult.pathDestNum=vins.vinsDestPath.size();
+		}
+		vins.drawresult.tapFlag=false;
+	}
+}
+
 
 /*
  Main process image thread: this thread detects and track feature between two continuous images
@@ -633,6 +646,9 @@ bool vins_updated = false;
 					//vins.drawresult.drawFixedArrowWithCameraAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
 					//vins.drawresult.drawArrowTowardFixedPointAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
 					vins.drawresult.drawArrowFllowedByPath(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated,vins.vinsDestPath);
+					//vins.drawresult.drawArrowFllowedByFixedTag(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated,vins.vinsDestPath);
+					
+					setVinsPath();
 					dispPosIn2Dmap();
 					
                     vins_updated = false;
@@ -1363,14 +1379,14 @@ vector<IMU_MSG> gyro_buf;  // for Interpolation
             finish_init = true;
         }
         
-//        float x_view = (float)vins.correct_Ps[frame_cnt][0];
-//        float y_view = (float)vins.correct_Ps[frame_cnt][1];
+        float x_view = (float)vins.correct_Ps[frame_cnt][0];
+        float y_view = (float)vins.correct_Ps[frame_cnt][1];
 //        float z_view = (float)vins.correct_Ps[frame_cnt][2];
 		//wrz
 //		float x_view=(float)vins.curPosIn2Dmap_m.x();
 //		float y_view=(float)vins.curPosIn2Dmap_m.y();
-		float x_view=(float)vins.curPosIn2Dmap_pixel.x();
-		float y_view=(float)vins.curPosIn2Dmap_pixel.y();
+//		float x_view=(float)vins.curPosIn2Dmap_pixel.x();
+//		float y_view=(float)vins.curPosIn2Dmap_pixel.y();
 //		float x_view=(float)vins.curTruthPos.x()/Width_2D_Map_m*Width_2D_Map_pixel;
 //		float y_view=(float)vins.curTruthPos.y()/Height_2D_Map_m*Height_2D_Map_pixel;
 		float z_view=(float)vins.initForwardDirecIn2Dmap.x();
@@ -1407,7 +1423,12 @@ vector<IMU_MSG> gyro_buf;  // for Interpolation
 		float y2D=(float)vins.curTruthPosIn2Dmap_pixel.y();
 		stringView = [NSString stringWithFormat:@"x2D: %f",x2D];
 		[_loop_label setText:stringView];
-		stringView = [NSString stringWithFormat:@"y2D: %f",y2D];
+//		stringView = [NSString stringWithFormat:@"y2D: %f",y2D];
+		int pathNumTmp=-2;
+		if(vins.hasInitialP0)pathNumTmp=-1;
+		if(vins.drawresult.hasInitialPlane)pathNumTmp=vins.vinsDestPath.size();
+		
+		stringView = [NSString stringWithFormat:@"pathNum: %d",pathNumTmp];
 		[_feature_label setText:stringView];
 
 		
@@ -1699,9 +1720,10 @@ bool start_active = true;
 	double direction_x=0.0;
 	double position_y=lateast_P.y();
 	double position_x=lateast_P.x();
-	if([self requstTruthPos:direction_y requestDx:direction_x requestPy:position_y requestPx:position_x]){
+//	if([self requstTruthPos:direction_y requestDx:direction_x requestPy:position_y requestPx:position_x]){
+	if(true){
 		NSLog(@"wrz0 initialP0 dy:%f, dx:%f, py:%f, px:%f",direction_y,direction_x,position_y,position_x);
-		//计算从vins到2D平面图间的转换关系
+//		计算从vins到2D平面图间的转换关系
 //		Vector3f vins_xAxisIn2Dmap(direction_x,direction_y,0.0);
 		//for demo
 		Vector3f vins_xAxisIn2Dmap(0,1.0,0.0);
@@ -1728,36 +1750,65 @@ bool start_active = true;
 		vins.initForwardDirecIn2Dmap.y()=direction_y;
 		
 		//设置目标路径
-		vector<Vector2i> pathDestIn2Dmap;
-//		pathDestIn2Dmap.push_back(Vector2i(512,770));
-//		pathDestIn2Dmap.push_back(Vector2i(185,770));
-//		pathDestIn2Dmap.push_back(Vector2i(185,1105));
-//		pathDestIn2Dmap.push_back(Vector2i(512,1105));
-//		pathDestIn2Dmap.push_back(Vector2i(512,770));
-		pathDestIn2Dmap.push_back(Vector2i(680,796));
-		pathDestIn2Dmap.push_back(Vector2i(680,1396));
-		pathDestIn2Dmap.push_back(Vector2i(680,1868));
-		pathDestIn2Dmap.push_back(Vector2i(1684,1868));
-		pathDestIn2Dmap.push_back(Vector2i(1684,1628));
+//		vector<Vector2i> pathDestIn2Dmap;
+//		pathDestIn2Dmap.push_back(Vector2i(512,750));
+//		pathDestIn2Dmap.push_back(Vector2i(295,760));
+//		pathDestIn2Dmap.push_back(Vector2i(295,1085));
+//		pathDestIn2Dmap.push_back(Vector2i(512,1085));
+//		pathDestIn2Dmap.push_back(Vector2i(512,750));
 		
-		int pathDestNum=pathDestIn2Dmap.size();
-		vins.drawresult.pathDestNum=pathDestNum;
-		vins.drawresult.curDestIndex=0;
+//		pathDestIn2Dmap.push_back(Vector2i(680,796));
+//		pathDestIn2Dmap.push_back(Vector2i(670,1396));
+//		pathDestIn2Dmap.push_back(Vector2i(620,1918));
+//		pathDestIn2Dmap.push_back(Vector2i(1684,1918));
+//		pathDestIn2Dmap.push_back(Vector2i(1684,1628));
+		
+//		int pathDestNum=pathDestIn2Dmap.size();
+//		vins.drawresult.pathDestNum=pathDestNum;
+//		vins.drawresult.curDestIndex=0;
+//		vins.vinsDestPath.clear();
+//		for(int i=0;i<pathDestNum;++i){
+//			Vector2i tmp_i=pathDestIn2Dmap[i];
+//			Vector2f tmp_f;
+//			tmp_f.x()=(float)tmp_i.x()/Width_2D_Map_pixel*Width_2D_Map_m;
+//			tmp_f.y()=(float)tmp_i.y()/Height_2D_Map_pixel*Height_2D_Map_m;
+//			tmp_f=vins.Rcw_2DmapTovins*tmp_f+vins.cTwc_2DmapTovins;
+//			Vector3f pathDestInVins;
+//			pathDestInVins.x()=tmp_f.x();
+//			pathDestInVins.y()=tmp_f.y();
+//			pathDestInVins.z()=0.0;
+//			vins.vinsDestPath.push_back(pathDestInVins);
+//			printf("wrz06 %u destX:%f, destY:%f, destZ:%f\n",i, pathDestInVins.x(),pathDestInVins.y(),pathDestInVins.z());
+//			
+//		}
 		vins.vinsDestPath.clear();
-		for(int i=0;i<pathDestNum;++i){
-			Vector2i tmp_i=pathDestIn2Dmap[i];
-			Vector2f tmp_f;
-			tmp_f.x()=(float)tmp_i.x()/Width_2D_Map_pixel*Width_2D_Map_m;
-			tmp_f.y()=(float)tmp_i.y()/Height_2D_Map_pixel*Height_2D_Map_m;
-			tmp_f=vins.Rcw_2DmapTovins*tmp_f+vins.cTwc_2DmapTovins;
-			Vector3f pathDestInVins;
-			pathDestInVins.x()=tmp_f.x();
-			pathDestInVins.y()=tmp_f.y();
-			pathDestInVins.z()=0.0;
-			vins.vinsDestPath.push_back(pathDestInVins);
-			printf("wrz06 %u destX:%f, destY:%f, destZ:%f\n",i, pathDestInVins.x(),pathDestInVins.y(),pathDestInVins.z());
-			
-		}
+//		vins.vinsDestPath.push_back(Vector3f(2.51,1.5,0));
+//		vins.vinsDestPath.push_back(Vector3f(2.51,-8.01,0));
+//		vins.vinsDestPath.push_back(Vector3f(9.52,-8.01,0));
+//		vins.vinsDestPath.push_back(Vector3f(9.52,1.5,0));
+//		vins.vinsDestPath.push_back(Vector3f(1.9,1.31,0));
+//		vins.vinsDestPath.push_back(Vector3f(2.43,-7.01,0));
+//		vins.vinsDestPath.push_back(Vector3f(9.0,-6.51,0));
+//		vins.vinsDestPath.push_back(Vector3f(7.81,1.58,0));
+
+//		int pathDestNum=vins.vinsDestPath.size();
+//		vins.drawresult.pathDestNum=pathDestNum;
+
+		//vins.vinsDestPath.push_back(Vector3f(2.51,1.5,0));
+		
+		
+//		Vector3f initCurDest;
+//		initCurDest.x()=2.51;
+//		initCurDest.y()=1.5;
+//		initCurDest.z()=0;
+//		Vector3f initNextDest;
+//		initNextDest.x()=2.51;
+//		initNextDest.y()=-7.01;
+//		initNextDest.z()=0;
+//		
+//		vins.drawresult.curDest=initCurDest;
+//		vins.drawresult.nextDest=initNextDest;
+		
 		vins.hasInitialP0=true;
 		
 		

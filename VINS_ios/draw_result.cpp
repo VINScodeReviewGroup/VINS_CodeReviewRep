@@ -44,6 +44,9 @@ DrawResult::DrawResult(float _pitch, float _roll, float _yaw, float _Tx, float _
 	pathDestNum=0;
 	curDest.setZero();
 	nextDest.setZero();
+	hasInitialPlane=false;
+	tagIndex=0;
+	hasSetPath=false;
 }
 bool checkBorder(const cv::Point2f &pt)
 {
@@ -1577,14 +1580,10 @@ void DrawResult::drawArrowFllowedByPath(cv:: Mat &equ_image, cv::Mat &result, ve
 			
 			//当前目标点和下一个目标点
 			curDest=vinsPaths[curDestIndex];
-			if(curDestIndex+1<pathDestNum)
-				nextDest=vinsPaths[curDestIndex+1];
+			nextDest=vinsPaths[(curDestIndex+1)%pathDestNum];
 			Vector3f destPoint=curDest;
 			Vector3f nextDestPoint=nextDest;
-			for(int i=0;i<vinsPaths.size();++i){
-				Vector3f tmp=vinsPaths[i];
-				printf("wrz07 %u destX:%f, destY:%f, destZ:5f\n",curDestIndex, tmp.x(),tmp.y(),tmp.z());
-			}
+			
 			//计算当前目标点和下一目标点在ground平面的投影点
 			length_diretion=(plane_normal.dot(destPoint) + arrowBasePointInGround->initPlane[3]) / (plane_normal.norm());
 			destPoint=destPoint-length_diretion*plane_normal/(plane_normal.norm());
@@ -1609,7 +1608,7 @@ void DrawResult::drawArrowFllowedByPath(cv:: Mat &equ_image, cv::Mat &result, ve
 			//箭头距离光心水平距离
 			float disArrowAndCamera=0;
 			//显示箭头总数目
-			int singleArrowNumAll=40;
+			int singleArrowNumAll=25;
 			int arrowNumPart1=0;
 			int arrowNumpart2=0;
 			
@@ -1628,8 +1627,7 @@ void DrawResult::drawArrowFllowedByPath(cv:: Mat &equ_image, cv::Mat &result, ve
 				
 				arrowNumpart2=singleArrowNumAll-arrowNumPart1;
 				if(arrowNumPart1<3){
-					if(curDestIndex+1<pathDestNum)
-						curDestIndex++;
+					curDestIndex=(curDestIndex+1)%pathDestNum;
 				}
 				
 				
@@ -1680,7 +1678,7 @@ void DrawResult::drawArrowFllowedByPath(cv:: Mat &equ_image, cv::Mat &result, ve
 			
 			//绘制已有的箭头
 			drawAnyArrow(result, arrowBasePointInGround->ori, arrowBasePointInGround->cox, arrowBasePointInGround->coy, arrowNumPart1, P_latest, R_latest, true);
-			if(curDestIndex<pathDestNum-1)
+			//if(curDestIndex<pathDestNum-1)
 				drawAnyArrow(result, arrowBasePointInGroundNext->ori, arrowBasePointInGroundNext->cox, arrowBasePointInGroundNext->coy, arrowNumpart2, P_latest, R_latest, true);
 			
 			
@@ -1692,7 +1690,7 @@ void DrawResult::drawArrowFllowedByPath(cv:: Mat &equ_image, cv::Mat &result, ve
 	
 	
 	//添加新的ground平面或更新ground平面
-	if (tapFlag and point_inlier.size()>28)
+	if (!hasInitialPlane and tapFlag and point_inlier.size()>28)
 	{
 		//手触屏幕的位置
 		float xx = 480 - locationTapY -1;
@@ -1719,6 +1717,7 @@ void DrawResult::drawArrowFllowedByPath(cv:: Mat &equ_image, cv::Mat &result, ve
 				arrowBasePointInGroundNext->boxflag=true;
 				arrowBasePointInGroundNext->moveflag=true;
 				arrowBasePointInGroundNext->initPlane=arrowBasePointInGround->initPlane;
+				hasInitialPlane=true;
 				
 			}
 			else{
@@ -1734,6 +1733,271 @@ void DrawResult::drawArrowFllowedByPath(cv:: Mat &equ_image, cv::Mat &result, ve
 			
 		}
 		tapFlag = false;
+	}
+	if(hasInitialPlane and hasSetPath and tapFlag){
+		curDestIndex=(curDestIndex+1)%pathDestNum;
+		tapFlag=false;
+	}
+	
+}
+
+void DrawResult::drawArrowFllowedByFixedTag(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update, vector<Vector3f>& vinsPaths){
+	cv::Mat aa(HEIGHT,WIDTH,CV_8UC3,Scalar(0,0,0));
+	result = aa;
+	Eigen::Matrix3f RIC;
+	RIC = Utility::ypr2R(Vector3d(RIC_y,RIC_p,RIC_r)).cast<float>();
+	
+	//计算透镜到像平面方向与惯性系中的z方向的夹角，夹角小于60度，则认为相机朝下俯视;相机坐标系为：像平面左下角为原点，朝右为x轴，朝上为y轴，朝后为z轴，满足右手法则
+	Vector3f cam_z(0, 0, -1);
+	Vector3f w_cam_z = R_latest * RIC * cam_z;
+	if (acos(w_cam_z.dot(Vector3f(0, 0, 1))) * 180.0 / M_PI < 60)
+	{
+		printf("look down\n");
+		look_down = true;
+	}
+	else
+	{
+		printf("not down\n");
+		look_down = false;
+	}
+	
+	Vector3f groundPlanePoint;
+	vector<Vector3f> point_inlier;
+	groundPlanePoint = findGround(point_cloud, point_inlier);
+	printf("Ground inlier size %d\n", int(point_inlier.size()) );
+	
+	
+	///draw ground area
+	//gound点集数目必须大于28才绘制地面网格
+	if (point_inlier.size()>28)
+		drawGround(result, point_inlier, P_latest, R_latest);
+	
+	
+	
+	//根据目标路径更新arrow位置
+	if(true){
+		if(arrowBasePointInGround->idx!=-1){
+			//计算相机光心在ground平面垂直投影点的坐标
+			Vector3f cameraInGround;
+			float length_diretion;
+			Vector3f plane_normal(arrowBasePointInGround->initPlane[0], arrowBasePointInGround->initPlane[1], arrowBasePointInGround->initPlane[2]);
+			length_diretion=(plane_normal.dot(P_latest) + arrowBasePointInGround->initPlane[3]) / (plane_normal.norm());
+			cameraInGround=P_latest-length_diretion*plane_normal/(plane_normal.norm());
+			float dis=abs((plane_normal.dot(cameraInGround) + arrowBasePointInGround->initPlane[3]) / (plane_normal.norm()));
+			printf("disCameraInGround:%f, length:%f\n",dis,length_diretion);
+			
+			//当前目标点和下一个目标点
+			Vector3f destPoint=curDest;
+			Vector3f nextDestPoint=nextDest;
+			
+			//计算当前目标点和下一目标点在ground平面的投影点
+			length_diretion=(plane_normal.dot(destPoint) + arrowBasePointInGround->initPlane[3]) / (plane_normal.norm());
+			destPoint=destPoint-length_diretion*plane_normal/(plane_normal.norm());
+			Vector3f plane_normalNext(arrowBasePointInGroundNext->initPlane[0], arrowBasePointInGroundNext->initPlane[1], arrowBasePointInGroundNext->initPlane[2]);
+			length_diretion=(plane_normalNext.dot(nextDestPoint) + arrowBasePointInGroundNext->initPlane[3]) / (plane_normalNext.norm());
+			nextDestPoint=nextDestPoint-length_diretion*plane_normalNext/(plane_normalNext.norm());
+			
+			
+			//计算箭头的当前目标方向和下一目标方向
+			Vector3f arrowDiretInGround=(destPoint-cameraInGround);
+			float destDis=arrowDiretInGround.norm();
+			arrowDiretInGround=arrowDiretInGround/destDis;
+			Vector3f arrowDiretInGroundNext=(nextDestPoint-destPoint);
+			float destDisNext=arrowDiretInGroundNext.norm();
+			if(destDisNext<0.01){
+				arrowDiretInGroundNext.setZero();
+			}
+			else{
+				arrowDiretInGroundNext=arrowDiretInGroundNext/destDisNext;
+			}
+			
+			
+			//箭头固定在光心投影点和目标点的矢量方向上，距离光心投影点一定的距离disArrowAndCamera；arrow的大小由lengthc描述
+			//箭头两边长度
+			float lengthc = 0.125;
+			//箭头前后宽度
+			float singleArrowLen=sqrt(2.0)*lengthc/2;
+			//箭头距离光心水平距离
+			float disArrowAndCamera=0;
+			//显示箭头总数目
+			int singleArrowNumAll=25;
+			int arrowNumPart1=0;
+			int arrowNumpart2=0;
+			
+			Vector3f ori, cox, coy, coz;
+			ori=cameraInGround+disArrowAndCamera*arrowDiretInGround;
+			Vector3f oriNext,coxNext,coyNext,cozNext;
+			oriNext=destPoint;
+			
+			//计算当前目标箭头数目和下一目标箭头数目
+			if(singleArrowLen*singleArrowNumAll+disArrowAndCamera<destDis){
+				arrowNumPart1=singleArrowNumAll;
+				arrowNumpart2=0;
+			}
+			else{
+				arrowNumPart1=floor((destDis-disArrowAndCamera)/singleArrowLen);
+				if(destDisNext<0.01){
+					arrowNumpart2=0;
+				}
+				else{
+					arrowNumpart2=singleArrowNumAll-arrowNumPart1;
+				}
+				
+			}
+			
+			//更新箭头的位置
+			Vector3f leftRightDire=arrowDiretInGround.cross(plane_normal);
+			leftRightDire=leftRightDire/leftRightDire.norm();
+			
+			Vector3f xDirec=(leftRightDire+arrowDiretInGround);
+			xDirec=xDirec/xDirec.norm();
+			Vector3f yDirec=(-leftRightDire+arrowDiretInGround);
+			yDirec=yDirec/yDirec.norm();
+			Vector3f zDirec=plane_normal/plane_normal.norm();
+			cox=ori+lengthc*xDirec;
+			coy=ori+lengthc*yDirec;
+			coz=ori+lengthc*zDirec;
+			
+			arrowBasePointInGround->ori=ori;
+			arrowBasePointInGround->cox=cox;
+			arrowBasePointInGround->coy=coy;
+			arrowBasePointInGround->coz=coz;
+			arrowBasePointInGround->size=lengthc;
+			arrowBasePointInGround->lix=xDirec;
+			arrowBasePointInGround->liy=yDirec;
+			arrowBasePointInGround->liz=zDirec;
+			
+			Vector3f leftRightDireNext=arrowDiretInGroundNext.cross(plane_normalNext);
+			leftRightDireNext=leftRightDireNext/leftRightDireNext.norm();
+			
+			Vector3f xDirecNext=(leftRightDireNext+arrowDiretInGroundNext);
+			xDirecNext=xDirecNext/xDirecNext.norm();
+			Vector3f yDirecNext=(-leftRightDireNext+arrowDiretInGroundNext);
+			yDirecNext=yDirecNext/yDirecNext.norm();
+			Vector3f zDirecNext=plane_normalNext/plane_normalNext.norm();
+			coxNext=oriNext+lengthc*xDirecNext;
+			coyNext=oriNext+lengthc*yDirecNext;
+			cozNext=oriNext+lengthc*zDirecNext;
+			
+			arrowBasePointInGroundNext->ori=oriNext;
+			arrowBasePointInGroundNext->cox=coxNext;
+			arrowBasePointInGroundNext->coy=coyNext;
+			arrowBasePointInGroundNext->coz=cozNext;
+			arrowBasePointInGroundNext->size=lengthc;
+			arrowBasePointInGroundNext->lix=xDirecNext;
+			arrowBasePointInGroundNext->liy=yDirecNext;
+			arrowBasePointInGroundNext->liz=zDirecNext;
+			
+			//绘制已有的箭头
+			drawAnyArrow(result, arrowBasePointInGround->ori, arrowBasePointInGround->cox, arrowBasePointInGround->coy, arrowNumPart1, P_latest, R_latest, true);
+			drawAnyArrow(result, arrowBasePointInGroundNext->ori, arrowBasePointInGroundNext->cox, arrowBasePointInGroundNext->coy, arrowNumpart2, P_latest, R_latest, true);
+			
+			
+			
+		}
+	}
+	
+	
+	
+	
+	//添加新的ground平面或更新ground平面
+	if (!hasInitialPlane and tapFlag and point_inlier.size()>28)
+	{
+		//手触屏幕的位置
+		float xx = 480 - locationTapY -1;
+		float yy = locationTapX;
+		Vector3f Pc;
+		Vector2f box_center_xy, center_input;
+		center_input<< xx, yy;
+		//计算ground点集中心点在投影到图像中的位置
+		Pc = (R_latest * RIC).transpose()* (groundPlanePoint - 1.0*P_latest  - R_latest * Vector3f(0,0.043,0));
+		box_center_xy.x() = FOCUS_LENGTH_X * Pc.x() / Pc.z()+ 240;
+		box_center_xy.y() = FOCUS_LENGTH_Y * Pc.y() / Pc.z()+ 320;
+		
+		
+		//如果手触屏幕位置离ground点集较近，且点集中位于平面内的点数多于上一次的plane，则更新ground平面
+		if ( (box_center_xy - center_input).norm()<150)
+		{
+			
+			if(arrowBasePointInGround->idx==-1){
+				arrowBasePointInGround->idx = 0;
+				arrowBasePointInGround->boxflag = true;
+				arrowBasePointInGround->moveflag = true;
+				arrowBasePointInGround->initPlane = findPlane(point_inlier);
+				arrowBasePointInGroundNext->idx=1;
+				arrowBasePointInGroundNext->boxflag=true;
+				arrowBasePointInGroundNext->moveflag=true;
+				arrowBasePointInGroundNext->initPlane=arrowBasePointInGround->initPlane;
+				hasInitialPlane=true;
+				
+			}
+			
+			
+		}
+		tapFlag = false;
+	}
+	if(hasInitialPlane and tapFlag and point_inlier.size()>28){
+	//if(hasInitialPlane and tapFlag){
+		//手触屏幕的位置
+		float xx = 480 - locationTapY -1;
+		float yy = locationTapX;
+		
+		Vector2f center_input;
+		center_input<< xx, yy;
+		int inlierSize=point_inlier.size();
+		Vector3f tmp;
+		tmp.setZero();
+		int tagPointNum=0;
+		for(int i=0;i<inlierSize;++i){
+			//计算inlier点投影到图像中的位置
+			Vector3f pointInC=(R_latest * RIC).transpose()* (point_inlier[i] - 1.0*P_latest  - R_latest * Vector3f(0,0.043,0));
+			Vector2f pointInC_pixel;
+			pointInC_pixel.x()=FOCUS_LENGTH_X * pointInC.x() / pointInC.z()+ 240;
+			pointInC_pixel.y()=FOCUS_LENGTH_Y * pointInC.y() / pointInC.z()+ 320;
+			if((pointInC_pixel-center_input).norm()<60){
+				tmp+=point_inlier[i];
+				tagPointNum++;
+			}
+		}
+		printf("wrz09 tagPointNum:%u, x:%f, y:%f, z:%f\n",tagPointNum,tmp.x(),tmp.y(),tmp.z());
+		if(tagPointNum>3){
+		//if(true){
+			Vector3f cameraInGround;
+			float length_diretion;
+			Vector3f plane_normal(arrowBasePointInGround->initPlane[0], arrowBasePointInGround->initPlane[1], arrowBasePointInGround->initPlane[2]);
+			length_diretion=(plane_normal.dot(P_latest) + arrowBasePointInGround->initPlane[3]) / (plane_normal.norm());
+			cameraInGround=P_latest-length_diretion*plane_normal/(plane_normal.norm());
+			tmp=tmp/tagPointNum;
+			//tmp=cameraInGround;
+			float squareY=8.51;
+			float squareX=6.51;
+			if(tagIndex==0){
+//				curDest=tmp+Vector3f(0,-9.51,0);
+//				nextDest=curDest+Vector3f(7.01,0,0);
+				curDest=tmp+Vector3f(0,-squareY,0);
+				nextDest=curDest+Vector3f(squareX,0,0);
+				tagIndex=1;
+			}
+			else if(tagIndex==1){
+				curDest=tmp+Vector3f(squareX,0,0);
+				nextDest=curDest+Vector3f(0,squareY,0);
+				tagIndex=2;
+			}
+			else if(tagIndex==2){
+				curDest=tmp+Vector3f(0,squareY,0);
+				nextDest=curDest+Vector3f(-squareX,0,0);
+				tagIndex=3;
+			}
+			else if(tagIndex==3){
+				curDest=tmp+Vector3f(-squareX,0,0);
+				nextDest=curDest;
+				tagIndex=0;
+			}
+			
+			
+		}
+		tapFlag=false;
+		
 	}
 }
 
