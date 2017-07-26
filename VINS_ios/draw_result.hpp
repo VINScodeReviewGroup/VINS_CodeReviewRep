@@ -17,6 +17,8 @@
 #include "utility.hpp"
 #include "global_param.hpp"
 #include "delaunay.h"
+//wrz
+#include "map_database.hpp"
 
 using namespace cv;
 using namespace Eigen;
@@ -95,6 +97,9 @@ public:
 	bool hasInitialPlane;
 	int tagIndex;
 	bool hasSetPath;
+	int arrowNumFirst;
+	int arrowNumSecond;
+	bool displayMap;
 	
 	
     
@@ -146,10 +151,13 @@ public:
     void drawBox(cv::Mat &result, Vector3f corner_0, Vector3f corner_x, Vector3f corner_y, Vector3f corner_z, float size, Vector3f P_latest, Matrix3f R_latest, bool inAR);
 	//draw arrow with num 3 wrz
 	void drawArrow(cv::Mat &result, Vector3f corner_0, Vector3f corner_x, Vector3f corner_y, float size, Vector3f P_latest, Matrix3f R_latest, bool inAR);
-	//draw arrow according to the input num
+	//wrz draw arrow according to the input num
 	void drawAnyArrow(cv::Mat &result, Vector3f corner_0, Vector3f corner_x, Vector3f corner_y, int singleArrowNum, Vector3f P_latest, Matrix3f R_latest, bool inAR);
+	//wrz
+	void ReprojectionWithMap(cv::Mat &result, vector<Vector3f> &point_cloud, vector<mapPoint>& mapPts, const Matrix3f *R_window,const Vector3f *T_window, bool box_in_trajectorty);
 	
     void Reprojection(cv::Mat &result, vector<Vector3f> &point_cloud, const Matrix3f *R_window,const Vector3f *T_window, bool box_in_trajectory);
+	
     vector<Vector3f> calculate_camera_pose(Vector3f camera_center, Matrix3f Rc, float length);
     cv::Point2f World2VirturCam(Eigen::Vector3f xyz, float &depth);
     void drawBoxVirturCam(cv::Mat &result);

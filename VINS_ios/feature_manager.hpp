@@ -58,10 +58,13 @@ public:
     bool fixed;
     bool in_point_cloud;
     int solve_flag; // 0 haven't solve yet; 1 solve succ; 2 solve fail;
+	
+	//wrz
+	bool hasVisited;
     
     FeaturePerId(int _feature_id, int _start_frame)
     : feature_id(_feature_id), start_frame(_start_frame),
-    used_num(0), estimated_depth(-1.0),is_outlier(false),fixed(false),in_point_cloud(false)
+    used_num(0), estimated_depth(-1.0),is_outlier(false),fixed(false),in_point_cloud(false),hasVisited(false)
     {
     }
     
@@ -93,6 +96,8 @@ public:
     list<FeaturePerId> feature;
     std::vector<std::pair<int, std::vector<int>>> outlier_info;
     int last_track_num;
+	//wrz
+	int erasedFeatureNum;
     
 private:
     double compensatedParallax1(FeaturePerId &it_per_id);

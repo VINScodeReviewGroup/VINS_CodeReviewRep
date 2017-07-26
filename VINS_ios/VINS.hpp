@@ -25,6 +25,9 @@
 #include "motion_estimator.hpp"
 #include "loop_closure_factor.hpp"
 
+//wrz
+#include "map_database.hpp"
+
 #include "time.h"
 #include <ctime>
 
@@ -165,6 +168,8 @@ class VINS
 	Vector2f curPosIn2Dmap_m;
 	Vector2f initForwardDirecIn2Dmap;
 	vector<Vector3f> vinsDestPath;
+	
+	mapDatabase mapData;
 	
 	
 	

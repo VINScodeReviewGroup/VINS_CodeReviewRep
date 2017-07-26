@@ -245,12 +245,17 @@ void VINS::new2old()
         dep(i) = para_Feature[i][0];
     }
     f_manager.setDepth(dep);
+	
+	
+	
+
+	
 }
 
 bool VINS::failureDetection()
 {
     bool is_failure = false;
-    
+    //能被跟踪的特征点不能低于4个
     if (f_manager.last_track_num < 4)
     {
         printf("failure little feature %d\n", f_manager.last_track_num);
@@ -263,22 +268,26 @@ bool VINS::failureDetection()
         is_failure = true;
     }
      */
+	//IMUbias不能大于1
     if (Bgs[WINDOW_SIZE].norm() > 1)
     {
         printf("failure  big IMU gyr bias estimation %f\n", Bgs[WINDOW_SIZE].norm());
         is_failure = true;
     }
+	//和前一帧的位移距离不能大于1m
     Vector3d tmp_P = Ps[WINDOW_SIZE];
     if ((tmp_P - last_P).norm() > 1)
     {
         printf("failure big translation\n");
         is_failure = true;
     }
+	//和前一帧高度不能变化太大
     if (abs(tmp_P.z() - last_P.z()) > 0.5)
     {
         printf("failure  big z translation\n");
         is_failure = true;
     }
+	//和上一帧姿态不能变化太大
     Matrix3d tmp_R = Rs[WINDOW_SIZE];
     Matrix3d delta_R = tmp_R.transpose() * last_R;
     Quaterniond delta_Q(delta_R);
@@ -289,7 +298,7 @@ bool VINS::failureDetection()
         printf("failure  big delta_angle \n");
         is_failure = true;
     }
-    
+	
     if(failure_hand)
     {
         failure_hand = false;
@@ -355,6 +364,7 @@ void VINS::update_loop_correction()
         Vector3d pts_i = it_per_id.feature_per_frame[0].point * it_per_id.estimated_depth;
         Vector3d tmp = r_drift * Rs[imu_i] * (ric * pts_i + tic) + r_drift * Ps[imu_i] + t_drift;
         correct_point_cloud.push_back(tmp.cast<float>());
+		
     }
     //update correct pose
     for(int i = 0; i < WINDOW_SIZE; i++)
@@ -364,6 +374,46 @@ void VINS::update_loop_correction()
         Matrix3d correct_r = r_drift * Rs[i];
         correct_Rs[i] = correct_r.cast<float>();
     }
+	
+	//wrz update map
+	if(solver_flag==INITIAL){
+		mapData.clear();
+		for(auto &it_per_id : f_manager.feature){
+			it_per_id.used_num = it_per_id.feature_per_frame.size();
+			if (!(it_per_id.used_num >= 4 && it_per_id.start_frame < WINDOW_SIZE - 2))
+				continue;
+			if (/*it_per_id.start_frame > WINDOW_SIZE * 3.0 / 4.0 ||*/ it_per_id.solve_flag != 1)
+				continue;
+			if(!it_per_id.hasVisited){
+				int imu_i=it_per_id.start_frame;
+				Vector3d pts_i=it_per_id.feature_per_frame[0].point*it_per_id.estimated_depth;
+				Vector3d tmp=r_drift*Rs[imu_i]*(ric*pts_i+tic)+r_drift*Ps[imu_i]+t_drift;
+				mapData.fuseMap(it_per_id, tmp);
+				it_per_id.hasVisited=true;
+				
+			}
+		}
+		printf("init mapSize:%d, init_points:%d\n",mapData.mapSize, f_manager.getFeatureCount());
+	}
+	else if(solver_flag==NON_LINEAR){
+		for(auto &it_per_id : f_manager.feature){
+			it_per_id.used_num = it_per_id.feature_per_frame.size();
+			if (!(it_per_id.used_num >= 4 && it_per_id.start_frame < WINDOW_SIZE - 2))
+				continue;
+			if (/*it_per_id.start_frame > WINDOW_SIZE * 3.0 / 4.0 ||*/ it_per_id.solve_flag != 1)
+				continue;
+			if(!it_per_id.hasVisited){
+				int imu_i=it_per_id.start_frame;
+				Vector3d pts_i=it_per_id.feature_per_frame[0].point*it_per_id.estimated_depth;
+				Vector3d tmp=r_drift*Rs[imu_i]*(ric*pts_i+tic)+r_drift*Ps[imu_i]+t_drift;
+				mapData.fuseMap(it_per_id, tmp);
+				it_per_id.hasVisited=true;
+				
+			}
+		}
+		printf("after mapSize:%d, init_points:%d\n",mapData.mapSize, f_manager.getFeatureCount());
+	}
+	
 }
 
 void VINS::processIMU(double dt, const Vector3d &linear_acceleration, const Vector3d &angular_velocity)
@@ -427,7 +477,9 @@ void VINS::processImage(map<int, Vector3d> &image_msg, double header, int buf_nu
 //    printf("this frame is-------------------------------%s\n", marginalization_flag ? "reject" : "accept");
 //    printf("Solving %d\n", frame_count);
     printf("number of feature: %d %d\n", feature_num = f_manager.getFeatureCount(), track_num);
-    
+	//debug wrz
+	printf("wrz10 number of all points: %d, curPoints: %d\n",f_manager.erasedFeatureNum+correct_point_cloud.size(),correct_point_cloud.size());
+	
     Headers[frame_count] = header;
 
     if(solver_flag == INITIAL)
@@ -1218,6 +1270,7 @@ bool VINS::visualInitialAlign()
             continue;
         it_per_id.estimated_depth *= s;
     }
+	
     //由重力方向得到首帧的初始位姿
     Matrix3d R0 = Utility::g2R(g);
     double yaw0 = Utility::R2ypr(R0).x();
@@ -1242,7 +1295,7 @@ bool VINS::visualInitialAlign()
 //			}
 //		}
     }
-    
+
     return true;
 }
 
@@ -1405,6 +1458,7 @@ void VINS::slideWindowOld()
             Vector3d tmp = Rs[imu_i] * (ric * pts_i + tic) + Ps[imu_i];
             point_cloud.push_back(tmp.cast<float>());
         }
+		printf("wrz11 point_cloud size:%d, correct_cloud:%d, feature size:%d\n",point_cloud.size(), correct_point_cloud.size(), f_manager.feature.size());
     }
     bool shift_depth = solver_flag == NON_LINEAR ? true : false;
     if (shift_depth)

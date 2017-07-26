@@ -52,12 +52,12 @@ void FeatureTracker::setMask()
     mask.setTo(255);
     
     // prefer to keep features that are tracked for long time
-
+	
     vector<pair<pair<int, max_min_pts>, pair<cv::Point2f, int>>> cnt_pts_id;
 
     for (unsigned int i = 0; i < forw_pts.size(); i++)
         cnt_pts_id.push_back(make_pair(make_pair(track_cnt[i], parallax_cnt[i]), make_pair(forw_pts[i], ids[i])));
-    
+    //根据特征点被跟踪的帧数目由大到小进行排序
     sort(cnt_pts_id.begin(), cnt_pts_id.end(), [](const pair<pair<int, max_min_pts>, pair<cv::Point2f, int>> &a, const pair<pair<int, max_min_pts>, pair<cv::Point2f, int>> &b)
          {
              return a.first.first > b.first.first;
@@ -67,7 +67,7 @@ void FeatureTracker::setMask()
     ids.clear();
     track_cnt.clear();
     parallax_cnt.clear();
-    
+    //对相应已检测特征点位置设置mask
     for (auto &it : cnt_pts_id)
     {
         if (mask.at<uchar>(it.second.first) == 255)
@@ -77,6 +77,7 @@ void FeatureTracker::setMask()
             ids.push_back(it.second.second);
             track_cnt.push_back(it.first.first);
             parallax_cnt.push_back(it.first.second);
+			//设置mask，不是画图...
             cv::circle(mask, it.second.first, MIN_DIST, 0, -1);
         }
     }

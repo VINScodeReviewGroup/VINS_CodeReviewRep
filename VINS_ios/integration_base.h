@@ -58,7 +58,7 @@ public:
 		//加速度，陀螺仪bias，相邻两帧之间bias恒定
         linearized_ba = _linearized_ba;
         linearized_bg = _linearized_bg;
-		//预积分的雅克比以及方差矩阵
+		//预积分的雅克比以及方差矩阵,相邻两帧间初始雅克比为单位矩阵，初始协方差为0
         jacobian.setIdentity();
         covariance.setZero();
 		//相邻两帧之间的所有Imu测量数值
@@ -75,21 +75,30 @@ public:
                              Eigen::Vector3d &result_linearized_ba, Eigen::Vector3d &result_linearized_bg, bool update_jacobian)
     {
         //ROS_INFO("midpoint integration");
+		//计算相对相邻两帧的第一帧的前一时刻加速度，使用前一时刻的预积分
         Vector3d un_acc_0 = delta_q * (_acc_0 - linearized_ba);
+		//角速度为当前和前一时刻的均值
         Vector3d un_gyr = 0.5 * (_gyr_0 + _gyr_1) - linearized_bg;
+		//更新姿态的预积分
         result_delta_q = delta_q * Quaterniond(1, un_gyr(0) * _dt / 2, un_gyr(1) * _dt / 2, un_gyr(2) * _dt / 2);
+		//计算相对相邻两帧的第一帧的当前时刻加速度，使用当前时刻的预积分
         Vector3d un_acc_1 = result_delta_q * (_acc_1 - linearized_ba);
+		//相对相邻两帧的第一帧的加速度为前一时刻和当前时刻的均值
         Vector3d un_acc = 0.5 * (un_acc_0 + un_acc_1);
+		//更新P的预积分，V的预积分，均与重力，两帧的位姿，速度无关
         result_delta_p = delta_p + delta_v * _dt + 0.5 * un_acc * _dt * _dt;
         result_delta_v = delta_v + un_acc * _dt;
         result_linearized_ba = linearized_ba;
         result_linearized_bg = linearized_bg;
-        
+		
+		//更新相邻帧i，j间的雅克比矩阵，参考VINS技术报告
         if(update_jacobian)
         {
-            Vector3d w_x = 0.5 * (_gyr_0 + _gyr_1) - linearized_bg;
+			//角速度为当前和前一时刻的均值
+			Vector3d w_x = 0.5 * (_gyr_0 + _gyr_1) - linearized_bg;
             Vector3d a_0_x = _acc_0 - linearized_ba;
             Vector3d a_1_x = _acc_1 - linearized_ba;
+			//[w]x,[a0]x,[a1]x；各自的skewmatrix
             Matrix3d R_w_x, R_a_0_x, R_a_1_x;
             
             R_w_x<< 0, -w_x(2), w_x(1),
@@ -103,7 +112,7 @@ public:
             R_a_1_x<< 0, -a_1_x(2), a_1_x(1),
                       a_1_x(2), 0, -a_1_x(0),
                       -a_1_x(1), a_1_x(0), 0;
-            
+            //论文中公式8中的（1+F*dt)
             MatrixXd F = MatrixXd::Zero(15, 15);
             F.block<3, 3>(0, 0) = Matrix3d::Identity();
             F.block<3, 3>(0, 3) = -0.25 * delta_q.toRotationMatrix() * R_a_0_x * _dt * _dt +
@@ -154,7 +163,7 @@ public:
         Vector3d result_delta_v;
         Vector3d result_linearized_ba;
         Vector3d result_linearized_bg;
-        
+        //两帧图像之间进行中值预积分，每来一次imu数据更新一下
         midPointIntegration(_dt, acc_0, gyr_0, _acc_1, _gyr_1, delta_p, delta_q, delta_v,
                             linearized_ba, linearized_bg,
                             result_delta_p, result_delta_q, result_delta_v,
@@ -162,6 +171,7 @@ public:
         
         //checkJacobian(_dt, acc_0, gyr_0, acc_1, gyr_1, delta_p, delta_q, delta_v,
         //                    linearized_ba, linearized_bg);
+		//迭代各变量，进行下一次更新
         delta_p = result_delta_p;
         delta_q = result_delta_q;
         delta_v = result_delta_v;

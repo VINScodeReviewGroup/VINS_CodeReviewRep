@@ -47,6 +47,7 @@ DrawResult::DrawResult(float _pitch, float _roll, float _yaw, float _Tx, float _
 	hasInitialPlane=false;
 	tagIndex=0;
 	hasSetPath=false;
+	displayMap=false;
 }
 bool checkBorder(const cv::Point2f &pt)
 {
@@ -156,6 +157,7 @@ cv::Scalar DrawResult::newColor() {
 vector<Vector3f> DrawResult::calculate_camera_pose(Vector3f camera_center, Matrix3f Rc, float length)
 {
     vector<Vector3f> result;
+	//相机框的四个角点和光心，相机坐标系下
     vector<Vector3f> origin;
     origin.push_back(Vector3f(length/2.0,length/2.0,-length*0.7));
     origin.push_back(Vector3f(-length/2.0,length/2.0,-length*0.7));
@@ -169,7 +171,8 @@ vector<Vector3f> DrawResult::calculate_camera_pose(Vector3f camera_center, Matri
 
     for (auto it : origin)
     {
-        Vector3f tmp;
+		//转到world下
+		Vector3f tmp;
         tmp = Rc*it + camera_center;
         /*
         Eigen::Vector3f Pc;
@@ -1415,7 +1418,7 @@ void DrawResult::drawArrowTowardFixedPointAR(cv:: Mat &equ_image, cv::Mat &resul
 		//显示箭头总数目
 		int singleArrowNumAll=10;
 		int arrowNumPart1=0;
-		int arrowNumpart2=0;
+		int arrowNumPart2=0;
 		
 		Vector3f ori, cox, coy, coz;
 		ori=cameraInGround+disArrowAndCamera*arrowDiretInGround;
@@ -1425,12 +1428,12 @@ void DrawResult::drawArrowTowardFixedPointAR(cv:: Mat &equ_image, cv::Mat &resul
 		//计算当前目标箭头数目和下一目标箭头数目
 		if(singleArrowLen*singleArrowNumAll+disArrowAndCamera<destDis){
 			arrowNumPart1=singleArrowNumAll;
-			arrowNumpart2=0;
+			arrowNumPart2=0;
 		}
 		else{
 			arrowNumPart1=floor((destDis-disArrowAndCamera)/singleArrowLen);
 			
-			arrowNumpart2=singleArrowNumAll-arrowNumPart1;
+			arrowNumPart2=singleArrowNumAll-arrowNumPart1;
 			
 		}
 		
@@ -1479,7 +1482,7 @@ void DrawResult::drawArrowTowardFixedPointAR(cv:: Mat &equ_image, cv::Mat &resul
 		
 		//绘制已有的箭头
 		drawAnyArrow(result, arrowBasePointInGround->ori, arrowBasePointInGround->cox, arrowBasePointInGround->coy, arrowNumPart1, P_latest, R_latest, true);
-		drawAnyArrow(result, arrowBasePointInGroundNext->ori, arrowBasePointInGroundNext->cox, arrowBasePointInGroundNext->coy, arrowNumpart2, P_latest, R_latest, true);
+		drawAnyArrow(result, arrowBasePointInGroundNext->ori, arrowBasePointInGroundNext->cox, arrowBasePointInGroundNext->coy, arrowNumPart2, P_latest, R_latest, true);
 		
 		
 		
@@ -1610,7 +1613,7 @@ void DrawResult::drawArrowFllowedByPath(cv:: Mat &equ_image, cv::Mat &result, ve
 			//显示箭头总数目
 			int singleArrowNumAll=25;
 			int arrowNumPart1=0;
-			int arrowNumpart2=0;
+			int arrowNumPart2=0;
 			
 			Vector3f ori, cox, coy, coz;
 			ori=cameraInGround+disArrowAndCamera*arrowDiretInGround;
@@ -1620,12 +1623,12 @@ void DrawResult::drawArrowFllowedByPath(cv:: Mat &equ_image, cv::Mat &result, ve
 			//计算当前目标箭头数目和下一目标箭头数目
 			if(singleArrowLen*singleArrowNumAll+disArrowAndCamera<destDis){
 				arrowNumPart1=singleArrowNumAll;
-				arrowNumpart2=0;
+				arrowNumPart2=0;
 			}
 			else{
 				arrowNumPart1=floor((destDis-disArrowAndCamera)/singleArrowLen);
 				
-				arrowNumpart2=singleArrowNumAll-arrowNumPart1;
+				arrowNumPart2=singleArrowNumAll-arrowNumPart1;
 				if(arrowNumPart1<3){
 					curDestIndex=(curDestIndex+1)%pathDestNum;
 				}
@@ -1677,9 +1680,11 @@ void DrawResult::drawArrowFllowedByPath(cv:: Mat &equ_image, cv::Mat &result, ve
 			arrowBasePointInGroundNext->liz=zDirecNext;
 			
 			//绘制已有的箭头
+			arrowNumFirst=arrowNumPart1;
+			arrowNumSecond=arrowNumPart2;
 			drawAnyArrow(result, arrowBasePointInGround->ori, arrowBasePointInGround->cox, arrowBasePointInGround->coy, arrowNumPart1, P_latest, R_latest, true);
 			//if(curDestIndex<pathDestNum-1)
-				drawAnyArrow(result, arrowBasePointInGroundNext->ori, arrowBasePointInGroundNext->cox, arrowBasePointInGroundNext->coy, arrowNumpart2, P_latest, R_latest, true);
+				drawAnyArrow(result, arrowBasePointInGroundNext->ori, arrowBasePointInGroundNext->cox, arrowBasePointInGroundNext->coy, arrowNumPart2, P_latest, R_latest, true);
 			
 			
 			
@@ -1822,7 +1827,7 @@ void DrawResult::drawArrowFllowedByFixedTag(cv:: Mat &equ_image, cv::Mat &result
 			//显示箭头总数目
 			int singleArrowNumAll=25;
 			int arrowNumPart1=0;
-			int arrowNumpart2=0;
+			int arrowNumPart2=0;
 			
 			Vector3f ori, cox, coy, coz;
 			ori=cameraInGround+disArrowAndCamera*arrowDiretInGround;
@@ -1832,15 +1837,15 @@ void DrawResult::drawArrowFllowedByFixedTag(cv:: Mat &equ_image, cv::Mat &result
 			//计算当前目标箭头数目和下一目标箭头数目
 			if(singleArrowLen*singleArrowNumAll+disArrowAndCamera<destDis){
 				arrowNumPart1=singleArrowNumAll;
-				arrowNumpart2=0;
+				arrowNumPart2=0;
 			}
 			else{
 				arrowNumPart1=floor((destDis-disArrowAndCamera)/singleArrowLen);
 				if(destDisNext<0.01){
-					arrowNumpart2=0;
+					arrowNumPart2=0;
 				}
 				else{
-					arrowNumpart2=singleArrowNumAll-arrowNumPart1;
+					arrowNumPart2=singleArrowNumAll-arrowNumPart1;
 				}
 				
 			}
@@ -1890,7 +1895,7 @@ void DrawResult::drawArrowFllowedByFixedTag(cv:: Mat &equ_image, cv::Mat &result
 			
 			//绘制已有的箭头
 			drawAnyArrow(result, arrowBasePointInGround->ori, arrowBasePointInGround->cox, arrowBasePointInGround->coy, arrowNumPart1, P_latest, R_latest, true);
-			drawAnyArrow(result, arrowBasePointInGroundNext->ori, arrowBasePointInGroundNext->cox, arrowBasePointInGroundNext->coy, arrowNumpart2, P_latest, R_latest, true);
+			drawAnyArrow(result, arrowBasePointInGroundNext->ori, arrowBasePointInGroundNext->cox, arrowBasePointInGroundNext->coy, arrowNumPart2, P_latest, R_latest, true);
 			
 			
 			
@@ -2004,7 +2009,8 @@ void DrawResult::drawArrowFllowedByFixedTag(cv:: Mat &equ_image, cv::Mat &result
 /////draw existing boxes in virtual camera
 void DrawResult::drawBoxVirturCam(cv::Mat &result)
 {
-    Vector3f camInWorld_T;
+	//在虚拟相机内绘制AR虚拟物体，比如显示箭头
+	Vector3f camInWorld_T;
     if(phy > 89)
         phy = 89;
     else if(phy < -89)
@@ -2030,13 +2036,16 @@ void DrawResult::drawBoxVirturCam(cv::Mat &result)
     Xwc.z(),Ywc.z(),Zwc.z();
 	
 	
-    for (unsigned int i =0; i< Grounds.size(); i++)
-    {
-        if ( Grounds[i].boxflag)
-        {
-            drawBox(result, Grounds[i].ori, Grounds[i].cox, Grounds[i].coy, Grounds[i].coz, Grounds[i].size, camInWorld_T, camInWorld_R, false);
-        }
-    }
+//    for (unsigned int i =0; i< Grounds.size(); i++)
+//    {
+//        if ( Grounds[i].boxflag)
+//        {
+//            drawBox(result, Grounds[i].ori, Grounds[i].cox, Grounds[i].coy, Grounds[i].coz, Grounds[i].size, camInWorld_T, camInWorld_R, false);
+//        }
+//    }
+	drawAnyArrow(result, arrowBasePointInGround->ori, arrowBasePointInGround->cox, arrowBasePointInGround->coy, arrowNumFirst, camInWorld_T, camInWorld_R, true);
+	//if(curDestIndex<pathDestNum-1)
+	drawAnyArrow(result, arrowBasePointInGroundNext->ori, arrowBasePointInGroundNext->cox, arrowBasePointInGroundNext->coy, arrowNumSecond, camInWorld_T, camInWorld_R, true);
 }
 
 /*
@@ -2053,7 +2062,8 @@ void DrawResult::drawBoxVirturCam(cv::Mat &result)
  */
 cv::Point2f DrawResult::World2VirturCam(Eigen::Vector3f xyz, float &depth)
 {
-    Vector3f camInWorld_T;
+	//根据用户触屏的反馈得到虚拟相机的位姿；虚拟相机的光轴朝向世界坐标原点，得到的成像就如离世界原点一定距离一定姿态人眼看到的结果
+	Vector3f camInWorld_T;
     if(phy > 89)
         phy = 89;
     else if(phy < -89)
@@ -2071,19 +2081,22 @@ cv::Point2f DrawResult::World2VirturCam(Eigen::Vector3f xyz, float &depth)
     camInWorld_T = -camInWorld_R * (0, 0, 1)^T
     */
     //camInWorld_R = Utility::ypr2R(Vector3f(0, 0, -theta)) * Utility::ypr2R(Vector3f(0, phy, 0)) * Utility::ypr2R(Vector3f(0, 0, -90));
+	//虚拟相机z轴在world下的表示
     Vector3f Zwc = -camInWorld_T/camInWorld_T.lpNorm<2>();
+	//虚拟相机z轴在world下的表示
     Vector3f Xwc;
     Xwc  << 1.0, -camInWorld_T.x()/camInWorld_T.y(), 0;
     Xwc = Xwc/Xwc.lpNorm<2>();
+	//虚拟相机z轴在world下的表示
     Vector3f Ywc = Zwc.cross(Xwc);
     Ywc = Ywc/Ywc.lpNorm<2>();
     
     camInWorld_R << Xwc.x(),Ywc.x(),Zwc.x(),
                     Xwc.y(),Ywc.y(),Zwc.y(),
                     Xwc.z(),Ywc.z(),Zwc.z();
-    
+    //将world下的点xyz转到虚拟相机坐标下
     Vector3f Pc = camInWorld_R.transpose() * (xyz - origin_w - camInWorld_T);
-    
+	
     cv::Point2f pts;
     pts.x = Fx * Pc.x() / Pc.z()+ Y0;
     pts.y = Fy * Pc.y() / Pc.z()+ X0;
@@ -2100,12 +2113,14 @@ void DrawResult::Reprojection(cv::Mat &result, vector<Vector3f> &point_cloud, co
     Eigen::Matrix3f RIC;
     RIC = Utility::ypr2R(Vector3d(RIC_y,RIC_p,RIC_r)).cast<float>();
     //std::cout << RIC << std::endl;
+	//虚拟相机的位姿
     Eigen::Matrix3f R_v_c = Utility::ypr2R(Eigen::Vector3f{yaw, pitch, roll});
     Eigen::Vector3f T_v_c;
     T_v_c << Tx,
              Ty,
              Tz;
-    
+	
+	//将关键帧位置转换到虚拟相机坐标内
     cv::Point2f pts_pre;
     cv::Point2f pts;
     
@@ -2118,7 +2133,7 @@ void DrawResult::Reprojection(cv::Mat &result, vector<Vector3f> &point_cloud, co
             pts_pre = pts;
             continue;
         }
-
+		//绘画轨迹
         while(trajectory_color.size() <= segment_indexs[i])
                 trajectory_color.push_back(newColor());
         cv::line(result, pts_pre, pts, trajectory_color[segment_indexs[i]], 2, 8, 0);
@@ -2127,7 +2142,8 @@ void DrawResult::Reprojection(cv::Mat &result, vector<Vector3f> &point_cloud, co
     }
     //draw frame arrow
     {
-        Vector3f p1, p2;
+		//绘画世界坐标系的XYZ轴在虚拟相机的成像
+		Vector3f p1, p2;
         cv::Point2f pt1, pt2;
         float length = 2.4 * 400 * radius / (Fx * 5.0) ;
         float scale_factor;
@@ -2157,7 +2173,8 @@ void DrawResult::Reprojection(cv::Mat &result, vector<Vector3f> &point_cloud, co
         
         //draw grid
         {
-            float dis = 1.0;
+			//绘画世界坐标系的XY平面网格在虚拟相机的成像
+			float dis = 1.0;
             int line_num = 9;
             vector<pair<Vector3f, Vector3f>> grid_space;
             vector<pair<Point2f, Point2f>> grid_plane;
@@ -2190,7 +2207,9 @@ void DrawResult::Reprojection(cv::Mat &result, vector<Vector3f> &point_cloud, co
     //draw camera
     for(int i = 0; i < WINDOW_SIZE; i++)
     {
-        float length;
+		//绘画world下相机在虚拟相机坐标下的成像
+		//滑窗当前帧显示较前几帧要大些
+		float length;
         if(i == WINDOW_SIZE - 1)
         {
             length = 0.3;
@@ -2207,11 +2226,12 @@ void DrawResult::Reprojection(cv::Mat &result, vector<Vector3f> &point_cloud, co
         }
     
         CvScalar camera_color = cvScalar(0,0,255);
+		//相机框
         cv::line(result, camera_coner[0], camera_coner[1], camera_color, 1, 8, 0);  //RGB
         cv::line(result, camera_coner[1], camera_coner[2], camera_color, 1, 8, 0);
         cv::line(result, camera_coner[2], camera_coner[3], camera_color, 1, 8, 0);
         cv::line(result, camera_coner[3], camera_coner[0], camera_color, 1, 8, 0);
-    
+		//光心到相机框顶点的四条线
         cv::line(result, camera_coner[4], camera_coner[0], camera_color, 1, 8, 0);
         cv::line(result, camera_coner[4], camera_coner[1], camera_color, 1, 8, 0);
         cv::line(result, camera_coner[4], camera_coner[2], camera_color, 1, 8, 0);
@@ -2219,11 +2239,12 @@ void DrawResult::Reprojection(cv::Mat &result, vector<Vector3f> &point_cloud, co
     }
     
     //draw existing boxes
+	//在虚拟相机内绘制箭头等虚拟物体
 	if (box_in_trajectorty){
         drawBoxVirturCam(result);
 		//printf("box_in_trajectory\n");
 	}
-
+	//绘制滑窗点云
     for (int i=0; i<point_cloud.size(); i++)
     {
         Eigen::Vector3f Pc;
@@ -2236,4 +2257,172 @@ void DrawResult::Reprojection(cv::Mat &result, vector<Vector3f> &point_cloud, co
         }
     }
     
+}
+
+void DrawResult::ReprojectionWithMap(cv::Mat &result, vector<Vector3f> &point_cloud, vector<mapPoint>& mapPts, const Matrix3f *R_window,const Vector3f *T_window, bool box_in_trajectorty)
+{
+	float depth_marker;
+	cv::Mat aa(WIDTH,HEIGHT,CV_8UC3,Scalar(242,242,242));
+	result = aa;
+	
+	Eigen::Matrix3f RIC;
+	RIC = Utility::ypr2R(Vector3d(RIC_y,RIC_p,RIC_r)).cast<float>();
+	//std::cout << RIC << std::endl;
+	//虚拟相机的位姿
+	Eigen::Matrix3f R_v_c = Utility::ypr2R(Eigen::Vector3f{yaw, pitch, roll});
+	Eigen::Vector3f T_v_c;
+	T_v_c << Tx,
+	Ty,
+	Tz;
+	
+	//将关键帧位置转换到虚拟相机坐标内
+	cv::Point2f pts_pre;
+	cv::Point2f pts;
+	
+	for (int i=0; i<pose.size(); i++)
+	{
+		Eigen::Vector3f Pc;
+		pts = World2VirturCam(pose[i], depth_marker);
+		if(i == 0)
+		{
+			pts_pre = pts;
+			continue;
+		}
+		//绘画轨迹
+		while(trajectory_color.size() <= segment_indexs[i])
+			trajectory_color.push_back(newColor());
+		cv::line(result, pts_pre, pts, trajectory_color[segment_indexs[i]], 2, 8, 0);
+		
+		pts_pre = pts;
+	}
+	//draw frame arrow
+	{
+		//绘画世界坐标系的XYZ轴在虚拟相机的成像
+		Vector3f p1, p2;
+		cv::Point2f pt1, pt2;
+		float length = 2.4 * 400 * radius / (Fx * 5.0) ;
+		float scale_factor;
+		p1 << -length, 0, 0;
+		p2 << length, 0, 0;
+		pt1 = World2VirturCam(p1, depth_marker);
+		pt2 = World2VirturCam(p2, depth_marker);
+		
+		arrowedLine(result, pt1, pt2, cvScalar(100,100,100),1, 8, 0, 0.02);
+		cv::putText(result, "X", pt2, 0, 0.5, cvScalar(100,100,100));
+		
+		p1 << 0, -length, 0;
+		p2 << 0, length, 0;
+		pt1 = World2VirturCam(p1, depth_marker);
+		pt2 = World2VirturCam(p2, depth_marker);
+		
+		arrowedLine(result, pt1, pt2, cvScalar(100,100,100),1 , 8, 0, 0.02);
+		cv::putText(result, "Y", pt2, 0, 0.5, cvScalar(100,100,100));
+		
+		p1 << 0, 0, -length;
+		p2 << 0, 0, length;
+		pt1 = World2VirturCam(p1, depth_marker);
+		pt2 = World2VirturCam(p2, depth_marker);
+		
+		arrowedLine(result, pt1, pt2, cvScalar(100,100,100), 1, 8, 0, 0.02);
+		cv::putText(result, "Z", pt2, 0, 0.5, cvScalar(100,100,100));
+		
+		//draw grid
+		{
+			//绘画世界坐标系的XY平面网格在虚拟相机的成像
+			float dis = 1.0;
+			int line_num = 9;
+			vector<pair<Vector3f, Vector3f>> grid_space;
+			vector<pair<Point2f, Point2f>> grid_plane;
+			Vector3f origin_grid;
+			origin_grid << - dis*(line_num/2),
+			- dis*(line_num/2),
+			0;
+			for(int i=0; i < line_num; i++)
+			{
+				pair<Vector3f, Vector3f> tmp_Pts;
+				tmp_Pts.first = origin_grid + Vector3f(dis * i, 0, 0);
+				tmp_Pts.second = origin_grid + Vector3f(dis * i, dis*(line_num - 1), 0);
+				grid_space.push_back(tmp_Pts);
+				
+				tmp_Pts.first = origin_grid + Vector3f(0, dis * i, 0);
+				tmp_Pts.second = origin_grid + Vector3f(dis*(line_num - 1), dis * i, 0);
+				grid_space.push_back(tmp_Pts);
+			}
+			for(auto it : grid_space)
+			{
+				cv::Point2f pts;
+				pts = World2VirturCam(it.first, depth_marker);
+				
+				cv::Point2f pts2;
+				pts2 = World2VirturCam(it.second, depth_marker);
+				cv::line(result, pts, pts2, cvScalar(180,180,180), 1, 8, 0);
+			}
+		}
+	}
+	//draw camera
+	for(int i = 0; i < WINDOW_SIZE; i++)
+	{
+		//绘画world下相机在虚拟相机坐标下的成像
+		//滑窗当前帧显示较前几帧要大些
+		float length;
+		if(i == WINDOW_SIZE - 1)
+		{
+			length = 0.3;
+		}
+		else
+		{
+			length = 0.1;
+		}
+		vector<Vector3f> camera_coner_w = calculate_camera_pose(T_window[i], R_window[i], length);
+		vector<cv::Point2f> camera_coner;
+		for(auto it : camera_coner_w)
+		{
+			camera_coner.push_back(World2VirturCam(it, depth_marker));
+		}
+		
+		CvScalar camera_color = cvScalar(0,0,255);
+		//相机框
+		cv::line(result, camera_coner[0], camera_coner[1], camera_color, 1, 8, 0);  //RGB
+		cv::line(result, camera_coner[1], camera_coner[2], camera_color, 1, 8, 0);
+		cv::line(result, camera_coner[2], camera_coner[3], camera_color, 1, 8, 0);
+		cv::line(result, camera_coner[3], camera_coner[0], camera_color, 1, 8, 0);
+		//光心到相机框顶点的四条线
+		cv::line(result, camera_coner[4], camera_coner[0], camera_color, 1, 8, 0);
+		cv::line(result, camera_coner[4], camera_coner[1], camera_color, 1, 8, 0);
+		cv::line(result, camera_coner[4], camera_coner[2], camera_color, 1, 8, 0);
+		cv::line(result, camera_coner[4], camera_coner[3], camera_color, 1, 8, 0);
+	}
+	
+	//draw existing boxes
+	//在虚拟相机内绘制箭头等虚拟物体
+	if (box_in_trajectorty){
+		drawBoxVirturCam(result);
+		//printf("box_in_trajectory\n");
+	}
+	//绘制滑窗点云
+	for (int i=0; i<point_cloud.size(); i++)
+	{
+		Eigen::Vector3f Pc;
+		Pc = RIC.transpose()*point_cloud[i];
+		Eigen::Vector3f Pv;
+		pts = World2VirturCam(point_cloud[i], depth_marker);
+		if(checkBorder(pts))
+		{
+			cv::circle(result, pts, 0, cvScalar(0,255,0), 3);
+		}
+	}
+	//绘制整个点云
+	if(displayMap){
+		for(int i=0;i<mapPts.size();++i){
+			Vector3d tmp=((mapPts[i]).pt);
+			Vector3f ptsWorld((float)tmp.x(),(float)tmp.y(),(float)tmp.z());
+			pts=World2VirturCam(ptsWorld,depth_marker);
+			if(checkBorder(pts)){
+				cv::circle(result, pts, 0, cvScalar(100,156,240), 1.5);
+			}
+			
+		}
+	}
+	
+	
 }

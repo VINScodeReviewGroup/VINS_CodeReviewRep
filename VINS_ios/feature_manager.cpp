@@ -17,6 +17,7 @@ FeatureManager::FeatureManager(Matrix3d _Rs[])
 : Rs(_Rs)
 {
     ric = Utility::ypr2R(Vector3d(RIC_y,RIC_p,RIC_r));
+	erasedFeatureNum=0;
 }
 
 double FeatureManager::compensatedParallax1(FeaturePerId &f_per_id)
@@ -131,6 +132,7 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, Vec
         {
             it->feature_per_frame.push_back(f_per_fra);
             last_track_num ++;
+			printf("start_frame:%d, frame_cout:%d, size:%d\n",it->start_frame,frame_count,it->feature_per_frame.size());
         }
     }
     //第一帧不算；如果track的单位特征点数目很少，表明和前一帧的差别明显，有较大可能拥有较明显的视差
@@ -139,13 +141,15 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, Vec
     
     for (auto &it_per_id : feature)
     {
-		//跟踪的特征点起始帧必须在当前帧前两帧之前；必须在当前帧或前一帧依然能够跟踪到
+		//跟踪的特征点起始帧必须在当前帧前两帧之前；必须在当前帧或前一帧依然能够跟踪到;
+		//由于slidewindow会将滑动窗口最后一帧减为frame_count-1，所以当前帧是第frame_count帧，这里统计至少能被第frame_count-1帧跟踪且被跟踪帧数至少为2帧的那些特征点。如果当前帧没跟踪，前一帧跟踪到也会被统计，为啥用着个算视差？为什么要分last_track_num和parallax_num？
 		if (it_per_id.start_frame <= frame_count - 2 &&
             it_per_id.start_frame + int(it_per_id.feature_per_frame.size()) - 1 >= frame_count - 1)
         {
 			//计算当前帧和前一帧之间每对跟踪的单位特征点间的视差；视差补偿，但好像注释掉没用？
 			parallax_sum += compensatedParallax2(it_per_id, frame_count);
             parallax_num++;
+			//printf("start_frame:%d, frame_cout:%d, size:%d\n",it_per_id.start_frame,frame_count,it_per_id.feature_per_frame.size());
         }
     }
     
@@ -214,7 +218,8 @@ void FeatureManager::triangulate(Vector3d Ps[], Vector3d tic, Matrix3d ric, bool
         if (it_per_id.estimated_depth > 0)
             continue;
         
-        it_per_id.is_outlier = false;
+		//add fuse map
+		it_per_id.is_outlier = false;
 		
 		//特征点首次被观察的帧为标准，更新点云深度？
         int imu_i = it_per_id.start_frame, imu_j = imu_i - 1;
@@ -282,8 +287,10 @@ void FeatureManager::removeBackShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3
             Eigen::Vector3d uv_i = it->feature_per_frame[0].point;
 			//删除第一帧，如果特征链长度小于2了，则删除该特征链
             it->feature_per_frame.erase(it->feature_per_frame.begin());
-            if (it->feature_per_frame.size() < 2)
+			if (it->feature_per_frame.size() < 2){
                 feature.erase(it);
+				
+			}
             else
             {
 				//更新三维点的深度
@@ -404,12 +411,13 @@ void FeatureManager::removeFront(int frame_count)
         }
         else
         {
-			//j+2为特征链长度，it->start_frame+j为第frame_count-1帧
+			//j+2为特征链长度，最后一帧为当前要margin的帧；it->start_frame+j为第frame_count-1帧
 			int j = WINDOW_SIZE - 1 - it->start_frame;
 			
 			//it->feature_per_frame.erase(it->feature_per_frame.begin() + j);
 			if(it->feature_per_frame.size() == j+2){
 				printf("wrz 070 remove front, start:%u, cur:%u, erase:%u\n",it->start_frame,it->feature_per_frame.size()+it->start_frame-1,it->start_frame+j);
+				//特征链上删除第frame_count-1对应的特征，则将当前要margin的帧的特征作为第frame_count-1帧的特征
                 it->feature_per_frame.erase(it->feature_per_frame.begin() + j);
 				
 			}
@@ -417,6 +425,7 @@ void FeatureManager::removeFront(int frame_count)
             {
 				printf("wrz 071 remove front, start:%u, cur:%u, erase:%u\n",it->start_frame,it->feature_per_frame.size()+it->start_frame-1,it->start_frame+j);
 				feature.erase(it);
+				printf("will delete?\n");//no
 				
 				
             }

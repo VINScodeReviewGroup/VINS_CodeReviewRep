@@ -647,7 +647,7 @@ bool vins_updated = false;
 					//vins.drawresult.drawArrowTowardFixedPointAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
 					vins.drawresult.drawArrowFllowedByPath(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated,vins.vinsDestPath);
 					//vins.drawresult.drawArrowFllowedByFixedTag(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated,vins.vinsDestPath);
-					
+					//wrz
 					setVinsPath();
 					dispPosIn2Dmap();
 					
@@ -677,13 +677,16 @@ bool vins_updated = false;
         }
         else //show VINS
         {
+			//wrz
 			dispPosIn2Dmap();
 			if(vins.solver_flag == VINS::NON_LINEAR)
             {
                 vins.drawresult.pose.clear();
                 vins.drawresult.pose = keyframe_database.refine_path;
                 vins.drawresult.segment_indexs = keyframe_database.segment_indexs;
-                vins.drawresult.Reprojection(vins.image_show, vins.correct_point_cloud, vins.correct_Rs, vins.correct_Ps, box_in_trajectory);
+                //vins.drawresult.Reprojection(vins.image_show, vins.correct_point_cloud, vins.correct_Rs, vins.correct_Ps, box_in_trajectory);
+				vins.drawresult.ReprojectionWithMap(vins.image_show, vins.correct_point_cloud, vins.mapData.mapPoints, vins.correct_Rs, vins.correct_Ps, box_in_trajectory);
+				
             }
             cv::Mat tmp2 = vins.image_show;
             
@@ -694,7 +697,9 @@ bool vins_updated = false;
             cv::flip(down_origin_image,down_origin_image,0);
             cv::Mat imageROI;
             imageROI = tmp2(cv::Rect(10,COL - down_origin_image.rows- 10, down_origin_image.cols,down_origin_image.rows));
-            cv::Mat mask;
+			//printf("roiRow:%d, roiCol:%d, imageRow:%d, imageCol:%d\n",imageROI.rows,imageROI.cols,image.rows,image.cols);
+			
+			cv::Mat mask;
             cv::cvtColor(down_origin_image, mask, CV_RGB2GRAY);
             down_origin_image.copyTo(imageROI, mask);
             
@@ -1698,6 +1703,22 @@ bool start_active = true;
     }
     
 }
+
+
+- (IBAction)clear_map:(UIButton *)sender {
+	
+	vins.mapData.clear();
+}
+
+- (IBAction)displayMapButton:(UIButton *)sender {
+	if(!vins.drawresult.displayMap){
+		vins.drawresult.displayMap=true;
+	}
+	else{
+		vins.drawresult.displayMap=false;
+	}
+}
+
 
 - (IBAction)updatePosIn2Dmap:(UIButton *)sender {
 	int curPosX_2Dmap=vins.curPosIn2Dmap_pixel.x();
