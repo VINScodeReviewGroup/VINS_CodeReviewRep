@@ -171,6 +171,22 @@
                                     <action selector="clear_map:" destination="2" eventType="touchUpInside" id="r1Y-Sn-KHi"/>
                                 </connections>
                             </button>
+                            <button opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="szS-vI-Dma">
+                                <rect key="frame" x="599" y="80" width="45" height="30"/>
+                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                <state key="normal" title="record"/>
+                                <connections>
+                                    <action selector="recordDataButton:" destination="2" eventType="touchUpInside" id="lH8-g1-2Cx"/>
+                                </connections>
+                            </button>
+                            <button opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="IQa-nO-3yd">
+                                <rect key="frame" x="592" y="48" width="62" height="30"/>
+                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                <state key="normal" title="playback"/>
+                                <connections>
+                                    <action selector="playbackButton:" destination="2" eventType="touchUpInside" id="Th7-Jh-SAH"/>
+                                </connections>
+                            </button>
                         </subviews>
                         <color key="backgroundColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
@@ -280,7 +296,7 @@
                     </connections>
                 </pinchGestureRecognizer>
             </objects>
-            <point key="canvasLocation" x="25.637181409295355" y="24.800000000000001"/>
+            <point key="canvasLocation" x="118" y="25"/>
         </scene>
     </scenes>
     <resources>

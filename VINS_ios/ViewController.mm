@@ -124,6 +124,9 @@ NSMutableData *vinsDataBuf = [[NSMutableData alloc] init];
 NSData *vinsReader;
 IMG_DATA imgData;
 IMU_MSG imuData;
+//wrz
+unsigned long imageDataInputIndex=0;
+bool imuDataLoaded=false;
 
 //for loop closure
 queue<pair<cv::Mat, double>> image_buf_loop;
@@ -443,6 +446,33 @@ bool vins_updated = false;
         Group[1] = highPart;
         double* time_now_decode = (double*)Group;
         double time_stamp = *time_now_decode;
+		
+		//control image process frequency
+		static int fre_count=0;
+		if(fre_count!=2){
+			fre_count++;
+			cv::Mat tmp;
+			cv::flip(image,tmp,-1);
+			image = tmp;
+			cv::cvtColor(image, image, CV_RGBA2BGR);
+			return;
+		}
+		else{
+			fre_count=0;
+		}
+		//wrz debug
+		static int countTmp=0;
+		static double timeFirst=time_stamp;
+		static double timeSecond=time_stamp;
+		if(countTmp>80){
+			int fre=(int)(countTmp/(timeSecond-timeFirst));
+			printf("wrz12 fre:%d\n",fre);
+			
+		}
+		else{
+			timeSecond=time_stamp;
+			countTmp++;
+		}
 		//printf("time_Stamp:%f, lowPart:%f, highPart:%f, group0:%f,\n",time_stamp,lowPart,highPart);
 		
 		//如果是第一帧，不用处理
@@ -455,7 +485,11 @@ bool vins_updated = false;
         //img_msg->header = lateast_imu_time;
         img_msg->header = time_stamp;
         BOOL isNeedRotation = image.size() != frameSize;
-        
+		
+		//存储时界面更新进度
+		[self performSelectorOnMainThread:@selector(showInputView) withObject:nil waitUntilDone:YES];
+		
+		printf("wrz12 readedImage:%d, storedImage:%d\n",imageDataInputIndex,vins.downloadImageIndex);
         //for save data
         cv::Mat input_frame;
 		//回放存储的图像数据
@@ -468,6 +502,7 @@ bool vins_updated = false;
             if(!still_play)
                 return;
             imageDataReadIndex++;
+			vins.playbackImageIndex=imageDataReadIndex;
 #ifdef DATA_EXPORT
             [self tapSaveImageToIphone:imgData.image];
 #endif
@@ -489,6 +524,7 @@ bool vins_updated = false;
             imgData.header = img_msg->header;
             imgData.image = MatToUIImage(image);
             imgDataBuf.push(imgData);
+			imageDataInputIndex++;
             return;
         }
         else
@@ -496,6 +532,8 @@ bool vins_updated = false;
             if(!imgDataBuf.empty())
                 return;
         }
+		
+		
         
         prevTime = mach_absolute_time();
 		
@@ -824,7 +862,8 @@ int kf_global_index;
 bool start_global_optimization = false;
 -(void)process
 {
-    //imu和camera的数据，每一个元素为一对pair：当前帧的image以及当前帧和上帧之间所有的imu数据
+	printf("the process func\n");
+	//imu和camera的数据，每一个元素为一对pair：当前帧的image以及当前帧和上帧之间所有的imu数据
     std::vector<std::pair<std::vector<ImuConstPtr>, ImgConstPtr>> measurements;
     std::unique_lock<std::mutex> lk(m_buf);
     con.wait(lk, [&]
@@ -990,8 +1029,12 @@ bool start_global_optimization = false;
         update();
         waiting_lists--;
         //finish solve one frame
-        [self performSelectorOnMainThread:@selector(showInputView) withObject:nil waitUntilDone:YES];
+
+        //[self performSelectorOnMainThread:@selector(showInputView) withObject:nil waitUntilDone:YES];
+		[self performSelectorOnMainThread:@selector(showInputView) withObject:nil waitUntilDone:YES];
     }
+	
+	
 }
 
 
@@ -1225,6 +1268,7 @@ vector<IMU_MSG> gyro_buf;  // for Interpolation
                  return;
              [imuReader getBytes:&imuData range: NSMakeRange(imuDataReadIndex * sizeof(imuData), sizeof(imuData))];
              imuDataReadIndex++;
+			 vins.playbackImuIndex=imuDataReadIndex;
              if(imuData.header == 0)
              {
                  imuDataFinished = true;
@@ -1242,15 +1286,34 @@ vector<IMU_MSG> gyro_buf;  // for Interpolation
          //记录imu数据
          if(start_record)
          {
-             TS(record_imu_buf);
+			 imuDataLoaded=false;
+			 TS(record_imu_buf);
              imuData.header = imu_msg->header;
              imuData.acc = imu_msg->acc;
              imuData.gyr = imu_msg->gyr;
              [imuDataBuf appendBytes:&imuData length:sizeof(imuData)];
              imuDataIndex++;
+			 vins.downloadImuIndex=imuDataIndex;
              TE(record_imu_buf);
              //NSLog(@"record: imu %lf, %lu",imuData.header,imuDataIndex);
          }
+		 else{
+			 if(!imuDataLoaded){
+				 if(imgDataBuf.empty()){
+					TS(record_imu);
+					imuData.header = 0; // as the ending marker
+					imuData.acc << 0,0,0;
+					imuData.gyr << 0,0,0;
+					[imuDataBuf appendBytes:&imuData length:sizeof(imuData)];
+					[self recordImu];
+					 imuDataLoaded=true;
+					TE(record_imu);
+				}
+				else{
+					printf("imgDataBuf not empty\n");
+				}
+			 }
+		 }
          
          m_time.lock();
          lateast_imu_time = imu_msg->header;
@@ -1355,9 +1418,22 @@ vector<IMU_MSG> gyro_buf;  // for Interpolation
         [_X_label setText:stringView];
         stringView = [NSString stringWithFormat:@"FAIL: %d times", vins.fail_times];
         [_Y_label setText:stringView];
-        stringView = [NSString stringWithFormat:@"PARALLAX: %d", vins.parallax_num_view];
-        [_Z_label setText:stringView];
-        
+		//wrz
+		//界面显示存储回放进度
+		if(start_record||!imgDataBuf.empty()){
+			stringView = [NSString stringWithFormat:@"img:%lu",vins.downloadImageIndex];
+			[_Z_label setText:stringView];
+			stringView = [NSString stringWithFormat:@"imu:%lu",vins.downloadImuIndex];
+			[_buf_label setText:stringView];
+		}
+		else if(start_playback){
+			stringView = [NSString stringWithFormat:@"img:%lu",vins.playbackImageIndex];
+			[_Z_label setText:stringView];
+			stringView = [NSString stringWithFormat:@"imu:%lu",vins.playbackImuIndex];
+			[_buf_label setText:stringView];
+		}
+		printf("33 imageDataIndex:%lu, imuDataIndex:%lu\n",vins.downloadImageIndex,vins.downloadImuIndex);
+
         stringView = [NSString stringWithFormat:@"Initializing: %d%%", vins.initProgress];
         [_feature_label2 setText:stringView];
         
@@ -1417,12 +1493,30 @@ vector<IMU_MSG> gyro_buf;  // for Interpolation
         [_total_odom_label setText:stringView];
         stringView = [NSString stringWithFormat:@"Y:%.2f",y_view];
         [_Y_label setText:stringView];
-        stringView = [NSString stringWithFormat:@"dx:%.2f",z_view];
-        [_Z_label setText:stringView];
 		
-		float dyIn2Dmap=vins.initForwardDirecIn2Dmap.y();
-		stringView = [NSString stringWithFormat:@"dy:%.2f",dyIn2Dmap];
-		[_buf_label setText:stringView];
+		//wrz 界面显示存储回放进度
+		if(start_record||!imgDataBuf.empty()){
+			stringView = [NSString stringWithFormat:@"img:%lu",vins.downloadImageIndex];
+			[_Z_label setText:stringView];
+			stringView = [NSString stringWithFormat:@"imu:%lu",vins.downloadImuIndex];
+			[_buf_label setText:stringView];
+		}
+		else if(start_playback){
+			stringView = [NSString stringWithFormat:@"img:%lu",vins.playbackImageIndex];
+			[_Z_label setText:stringView];
+			stringView = [NSString stringWithFormat:@"imu:%lu",vins.playbackImuIndex];
+			[_buf_label setText:stringView];
+		}
+		
+//			stringView = [NSString stringWithFormat:@"dx:%.2f",z_view];
+//			[_Z_label setText:stringView];
+//			
+//			float dyIn2Dmap=vins.initForwardDirecIn2Dmap.y();
+//			stringView = [NSString stringWithFormat:@"dy:%.2f",dyIn2Dmap];
+//			[_buf_label setText:stringView];
+		
+		printf("00 imageDataIndex:%lu, imuDataIndex:%lu\n",vins.downloadImageIndex,vins.downloadImuIndex);
+		
 		
 		float x2D=(float)vins.curTruthPosIn2Dmap_pixel.x();
 		float y2D=(float)vins.curTruthPosIn2Dmap_pixel.y();
@@ -1704,6 +1798,55 @@ bool start_active = true;
     
 }
 
+//回放存储数据
+- (IBAction)playbackButton:(UIButton *)sender {
+	start_playback = !start_playback;
+	if(start_playback)
+	{
+		imageDataReadIndex=0;
+		imuDataReadIndex=0;
+		//TS(read_imu);
+		NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+		NSString *documentsPath = [paths objectAtIndex:0];
+		NSString *filePath = [documentsPath stringByAppendingPathComponent:@"IMU"]; //Add the file name
+		imuReader = [NSData dataWithContentsOfFile:filePath];
+		//TE(read_imu);
+		start_record = false;
+	}
+	printf("wrz11 playback\n");
+
+}
+
+//存储记录输入数据
+- (IBAction)recordDataButton:(UIButton *)sender {
+	start_record = !start_record;
+	if(start_record)
+	{
+		start_playback = false;
+		imageDataIndex=0;
+		imuDataIndex=0;
+		
+		[saveData start];
+	}
+//	else
+//	{
+//		if(imgDataBuf.empty()){
+//			//TS(record_imu);
+//			imuData.header = 0; // as the ending marker
+//			imuData.acc << 0,0,0;
+//			imuData.gyr << 0,0,0;
+//			[imuDataBuf appendBytes:&imuData length:sizeof(imuData)];
+//			[self recordImu];
+//			//TE(record_imu);
+//		}
+//		else{
+//			printf("imgDataBuf not empty\n");
+//		}
+//	}
+	printf("wrz11 record:%d\n",start_record);
+
+}
+
 
 - (IBAction)clear_map:(UIButton *)sender {
 	
@@ -1977,6 +2120,7 @@ bool start_active = true;
     }
 }
 
+//是否关闭回环
 - (IBAction)recordButtonPressed:(id)sender {
     if(LOOP_CLOSURE)
     {
@@ -1988,28 +2132,9 @@ bool start_active = true;
         LOOP_CLOSURE = true;
         [_recordButton setTitle:@"UNLOOP" forState:UIControlStateNormal];
     }
-    /*
-     start_record = !start_record;
-     if(start_record)
-     {
-     start_playback = false;
-     [_recordButton setTitle:@"Stop" forState:UIControlStateNormal];
-     [saveData start];
-     }
-     else
-     {
-     TS(record_imu);
-     imuData.header = 0; // as the ending marker
-     imuData.acc << 0,0,0;
-     imuData.gyr << 0,0,0;
-     [imuDataBuf appendBytes:&imuData length:sizeof(imuData)];
-     [self recordImu];
-     TE(record_imu);
-     [_recordButton setTitle:@"Record" forState:UIControlStateNormal];
-     }
-     */
 }
 
+//重新初始化
 - (IBAction)playbackButtonPressed:(id)sender {
     vins.failure_hand = true;
     vins.drawresult.change_color = true;
@@ -2017,22 +2142,6 @@ bool start_active = true;
     segmentation_index++;
     keyframe_database.max_seg_index++;
     keyframe_database.cur_seg_index = keyframe_database.max_seg_index;
-    /*
-     start_playback = !start_playback;
-     if(start_playback)
-     {
-     //TS(read_imu);
-     NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-     NSString *documentsPath = [paths objectAtIndex:0];
-     NSString *filePath = [documentsPath stringByAppendingPathComponent:@"IMU"]; //Add the file name
-     imuReader = [NSData dataWithContentsOfFile:filePath];
-     //TE(read_imu);
-     start_record = false;
-     [_playbackButton setTitle:@"Stop" forState:UIControlStateNormal];
-     }
-     else
-     [_playbackButton setTitle:@"Playback" forState:UIControlStateNormal];
-     */
 }
 
 /********************************************************************UI Button Controler********************************************************************/
@@ -2058,6 +2167,9 @@ bool start_active = true;
                 [self recordImageTime:tmp_data];
                 [self recordImage:tmp_data];
                 imageDataIndex++;
+				vins.downloadImageIndex=imageDataIndex;
+				
+				printf("22 imageDataIndex:%lu, imuDataIndex:%lu\n",imageDataIndex,imuDataIndex);
                 //NSLog(@"record: %lf %lu",tmp_data.header,imageDataIndex);
             }
         }
@@ -2111,7 +2223,10 @@ bool start_active = true;
     NSString *documentsPath = [paths objectAtIndex:0];
     NSString *filePath = [documentsPath stringByAppendingPathComponent:@"IMU"]; //Add the file name
     
-    [imuDataBuf writeToFile:filePath atomically:YES];
+    if([imuDataBuf writeToFile:filePath atomically:YES])
+		NSLog(@"wrz11 record imu ok, path:%@",filePath);
+	else
+		printf("wrz11 record imu failed\n");
     //[msgData writeToFile:filePath atomically:YES];
 }
 
@@ -2137,7 +2252,10 @@ bool start_active = true;
     NSString *filename = [NSString stringWithFormat:@"%lu", imageDataIndex];
     NSString *filePath = [documentsPath stringByAppendingPathComponent:filename]; //Add the file name
     
-    [msgData writeToFile:filePath atomically:YES];
+    if([msgData writeToFile:filePath atomically:YES])
+		NSLog(@"wrz11 record image time ok, path:%@",filePath);
+	else
+		printf("wrz11 record image time failed\n");
 }
 
 - (void)recordImage:(IMG_DATA&)image_data
@@ -2152,7 +2270,10 @@ bool start_active = true;
     NSString *filename = [NSString stringWithFormat:@"%lu", imageDataIndex];
     NSString *filePath = [documentsPath stringByAppendingPathComponent:filename]; //Add the file name
     
-    [msgData writeToFile:filePath atomically:YES];
+    if([msgData writeToFile:filePath atomically:YES])
+		NSLog(@"wrz11 record image ok, path:%@",filePath);
+	else
+		printf("wrz11 record image failed\n");
 }
 
 -(bool)readImageTime:(unsigned long)index
@@ -2174,11 +2295,12 @@ bool start_active = true;
             imgData.header = time;
         }
         file_exist = true;
+		NSLog(@"wrz11 image time File exists");
     }
     else
     {
         file_exist = false;
-        //NSLog(@"File does not exist");
+        NSLog(@"wrz11 image time File does not exist");
     }
     return file_exist;
 }
@@ -2197,10 +2319,12 @@ bool start_active = true;
         NSData *pngData = [NSData dataWithContentsOfFile:filePath];
         imgData.image = [UIImage imageWithData:pngData];
         file_exist = true;
+		NSLog(@"wrz11 image File exists");
     }
     else
     {
         file_exist = false;
+		NSLog(@"wrz11 image File does not exist");
         //NSLog(@"File does not exist");
     }
     return file_exist;

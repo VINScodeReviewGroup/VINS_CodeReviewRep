@@ -21,8 +21,10 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>LSApplicationCategoryType</key>
-	<string>ImagePicker</string>
+	<integer>0</integer>
 	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>

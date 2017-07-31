@@ -168,6 +168,10 @@ class VINS
 	Vector2f curPosIn2Dmap_m;
 	Vector2f initForwardDirecIn2Dmap;
 	vector<Vector3f> vinsDestPath;
+	unsigned long downloadImageIndex;
+	unsigned long downloadImuIndex;
+	unsigned long playbackImageIndex;
+	unsigned long playbackImuIndex;
 	
 	mapDatabase mapData;
 	
