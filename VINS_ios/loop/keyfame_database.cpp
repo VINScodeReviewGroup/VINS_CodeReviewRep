@@ -305,7 +305,7 @@ void KeyFrameDatabase::updateVisualization()
     }
     printf("loop update visualization\n");
 }
-
+//这个函数作用？
 void KeyFrameDatabase::addLoop(int loop_index)
 {
     KeyFrame* cur_KF = getLastKeyframe();

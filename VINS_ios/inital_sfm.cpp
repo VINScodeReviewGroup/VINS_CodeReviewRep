@@ -1,3 +1,4 @@
+#include "global_param.hpp"
 #include "inital_sfm.hpp"
 
 GlobalSFM::GlobalSFM(){}
@@ -58,9 +59,9 @@ bool GlobalSFM::solveFrameByPnP(Matrix3d &R_initial, Vector3d &P_initial, int i,
         }
     }
 	//和sfm三维features点对应的特征点数目不能低于15
-    if (int(pts_2_vector.size()) < 15)
+    if (int(pts_2_vector.size()) < solveFrameByPnPptsSizeThres)
     {
-        cout << "feature tracking not enough, please slowly move you device!" << endl;
+        cout << "wrz17 feature tracking not enough, please slowly move you device!" << endl;
         return false;
     }
 	//Pnp初始化R和t
@@ -74,7 +75,7 @@ bool GlobalSFM::solveFrameByPnP(Matrix3d &R_initial, Vector3d &P_initial, int i,
     pnp_succ = cv::solvePnP(pts_3_vector, pts_2_vector, K, D, rvec, t, 1);
     if(!pnp_succ)
     {
-        cout << "pnp failed !" << endl;
+        cout << "wrz17 pnp failed !" << endl;
         return false;
     }
     cv::Rodrigues(rvec, r);
@@ -191,8 +192,10 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
             Matrix3d R_initial = c_Rotation[i - 1];
             Vector3d P_initial = c_Translation[i - 1];
 			//Pnp解算第i帧的位姿，三维点为前面三角化的点云中可被当前帧观测到的那些三维点
-            if(!solveFrameByPnP(R_initial, P_initial, i, sfm_f))
-                return false;
+			if(!solveFrameByPnP(R_initial, P_initial, i, sfm_f)){
+				printf("wrz17 solvePnP failed\n");
+				return false;
+			}
             c_Rotation[i] = R_initial;
             c_Translation[i] = P_initial;
             c_Quat[i] = c_Rotation[i];
@@ -315,15 +318,15 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
     ceres::Solver::Options options;
     options.linear_solver_type = ceres::DENSE_SCHUR;
     //options.minimizer_progress_to_stdout = true;
-    options.max_solver_time_in_seconds = 0.3;
+    options.max_solver_time_in_seconds = 0.6;
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
     std::cout << summary.BriefReport() << "\n";
-    if (summary.termination_type == ceres::CONVERGENCE || summary.final_cost < 3e-03)
+    if (summary.termination_type == ceres::CONVERGENCE || summary.final_cost < constructFinalCostThres)
         cout << "vision only BA converge" << endl;
     else
     {
-        cout << "vision only BA not converge " << endl;
+        cout << "wrz17 vision only BA not converge " << endl;
         return false;
     }
     for (int i = 0; i < frame_num; i++)

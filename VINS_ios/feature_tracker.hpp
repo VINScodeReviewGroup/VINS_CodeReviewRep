@@ -17,8 +17,8 @@
 #include "global_param.hpp"
 #include <string>
 
-#define MAX_CNT 60
-#define MIN_DIST 30
+//#define MAX_CNT 60
+//#define MIN_DIST 30
 #define COL 480
 #define ROW 640
 #define F_THRESHOLD 1.0

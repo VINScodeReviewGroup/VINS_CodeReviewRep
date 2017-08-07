@@ -203,19 +203,20 @@ bool SolveScale(map<double, ImageFrame> &all_image_frame, Vector3d &g, VectorXd 
     b = b * 1000.0;
     x = A.ldlt().solve(b);
     double s = x(n_state - 1) / 100.0;
-    printf("estimated scale: %f\n", s);
+    printf("wrz16 estimated scale: %f\n", s);
     g = x.segment<3>(n_state - 4);
     cout << " result g     " << g.norm() << " " << g.transpose() << endl;
     if(fabs(g.norm() - G_NORM) > G_THRESHOLD ||  s < 0)
     {
-        return false;
+		printf("wrz17 g norm big:%f!\n",g.norm());
+		return false;
     }
     
     RefineGravity(all_image_frame, g, x);
     s = (x.tail<1>())(0) / 100.0;
     (x.tail<1>())(0) = s;
-    printf("refine estimated scale: %f", s);
-    cout << " refine     " << g.norm() << " " << g.transpose() << endl;
+    printf("wrz16 refine estimated scale: %f", s);
+    cout << "wrz16 refine     " << g.norm() << " " << g.transpose() << endl;
     if(s > 0.0 )
     {
         printf("initial succ!\n");
@@ -223,7 +224,7 @@ bool SolveScale(map<double, ImageFrame> &all_image_frame, Vector3d &g, VectorXd 
     }
     else
     {
-        printf("initial fail\n");
+        printf("wrz16 initial fail\n");
         return false;
     }
     return true;

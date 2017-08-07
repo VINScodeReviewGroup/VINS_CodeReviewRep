@@ -51,13 +51,14 @@ struct RetriveData
     double loop_pose[7];
 };
 
+class KeyFrameDatabase;
 class VINS
 {
   public:
     
     typedef IMUFactor IMUFactor_t;
     
-    VINS();
+    VINS(KeyFrameDatabase* kd);
     
     enum SolverFlag
     {
@@ -173,6 +174,8 @@ class VINS
 	unsigned long playbackImageIndex;
 	unsigned long playbackImuIndex;
 	
+	//wrz
+	KeyFrameDatabase* keyframeDatabaseVins;
 	mapDatabase mapData;
 	
 	
@@ -191,6 +194,7 @@ class VINS
     InitStatus init_status;
     int parallax_num_view;
     int fail_times;
+	int succ_times=0;;
     int initProgress;
     double final_cost;
     double visual_cost;
@@ -216,5 +220,7 @@ class VINS
     void failureRecover();
     void reInit();
     void update_loop_correction();
+	//wrz
+	void updateVinsMap();
 };
 #endif /* VINS_hpp */

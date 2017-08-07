@@ -63,7 +63,7 @@ bool setGlobalParam(DeviceType device)
             FOCUS_LENGTH_X = 548.813;
             PX = 238.520;
             SOLVER_TIME = 0.06;
-            FREQ = 3;
+            FREQ = 1;
             
             //extrinsic param
             TIC_X = 0.0;

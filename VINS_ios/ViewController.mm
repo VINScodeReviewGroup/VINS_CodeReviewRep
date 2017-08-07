@@ -60,7 +60,6 @@
 @synthesize videoCamera;
 
 FeatureTracker featuretracker;
-VINS vins;
 
 queue<ImgConstPtr> img_msg_buf;
 queue<ImuConstPtr> imu_msg_buf;
@@ -126,13 +125,16 @@ IMG_DATA imgData;
 IMU_MSG imuData;
 //wrz
 unsigned long imageDataInputIndex=0;
-bool imuDataLoaded=false;
+bool imuDataLoaded=true;
+bool oldImageDataCleared=false;
+bool oldImuDataCleared=false;
 
 //for loop closure
 queue<pair<cv::Mat, double>> image_buf_loop;
 std::mutex i_buf;
 LoopClosure *loop_closure;
 KeyFrameDatabase keyframe_database;
+VINS vins(&keyframe_database);
 int process_keyframe_cnt = 0;
 int miss_keyframe_num = 0;
 int keyframe_freq = 0;
@@ -152,6 +154,204 @@ float x_view_last = -5000;
 float y_view_last = -5000;
 float z_view_last = -5000;
 float total_odom = 0;
+
+//回放数据时清除所有viewControl定义的状态
+void clearViewControl(){
+	imageDataReadIndex=0;
+	imuDataReadIndex=0;
+	imuDataFinished=false;
+	imageDataInputIndex=0;
+	imuDataLoaded=true;
+	oldImuDataCleared=false;
+	oldImageDataCleared=false;
+	fre_count=0;
+	while(!img_msg_buf.empty())img_msg_buf.pop();
+	while(!imu_msg_buf.empty())imu_msg_buf.pop();
+	while(!draw_buf.empty())draw_buf.pop();
+	while(!image_buf_loop.empty())image_buf_loop.pop();
+	if(!erase_index.empty())erase_index.clear();
+	waiting_lists = 0;
+	time_interval = 0;
+	frame_cnt = 0;
+	ui_main = false;
+	box_in_AR = false;
+	box_in_trajectory = false;
+	CAMERA_MODE = true;
+	SHOW_TRACK = true;
+	start_show = false;
+	current_time = -1;
+	lateast_imu_time = -1;
+	imu_prepare = 0;
+	latest_time = -1;
+	imuDataBuf = [[NSMutableData alloc] init];
+	vinsDataBuf = [[NSMutableData alloc] init];
+	process_keyframe_cnt = 0;
+	miss_keyframe_num = 0;
+	keyframe_freq = 0;
+	global_frame_cnt = 0;
+	loop_check_cnt = 0;
+	voc_init_ok = false;
+	old_index = -1;
+	loop_correct_t = Eigen::Vector3d(0, 0, 0);
+	loop_correct_r = Eigen::Matrix3d::Identity();
+	segmentation_index = 0;
+	loop_old_index = -1;
+	x_view_last = -5000;
+	y_view_last = -5000;
+	z_view_last = -5000;
+	total_odom = 0;
+	vins.succ_times=0;
+	vins.clearState();
+	printf("wrz16 i: clear done!\n");
+	
+}
+
+//*****************************捕捉异常***************************************//
+/*
+#import "UncaughtExceptionHandler.h"
+#include <libkern/OSAtomic.h>
+#include <execinfo.h>
+NSString * const UncaughtExceptionHandlerSignalExceptionName = @"UncaughtExceptionHandlerSignalExceptionName";
+NSString * const UncaughtExceptionHandlerSignalKey = @"UncaughtExceptionHandlerSignalKey";
+NSString * const UncaughtExceptionHandlerAddressesKey = @"UncaughtExceptionHandlerAddressesKey";
+volatile int32_t UncaughtExceptionCount = 0;
+const int32_t UncaughtExceptionMaximum = 10;
+const NSInteger UncaughtExceptionHandlerSkipAddressCount = 4;
+const NSInteger UncaughtExceptionHandlerReportAddressCount = 5;
+@implementation UncaughtExceptionHandler
++ (NSArray *)backtrace
+{
+	void* callstack[128];
+ int frames = backtrace(callstack, 128);
+ char **strs = backtrace_symbols(callstack, frames);
+ 
+ int i;
+ NSMutableArray *backtrace = [NSMutableArray arrayWithCapacity:frames];
+ for (
+	  
+	  i = UncaughtExceptionHandlerSkipAddressCount;
+	  
+	  i < UncaughtExceptionHandlerSkipAddressCount +
+	  UncaughtExceptionHandlerReportAddressCount;
+	  i++)
+ {
+	 
+	 [backtrace addObject:[NSString stringWithUTF8String:strs[i]]];
+ }
+ free(strs);
+ 
+ return backtrace;
+}
+- (void)alertView:(UIAlertView *)anAlertView clickedButtonAtIndex:(NSInteger)anIndex
+{
+	if (anIndex == 0)
+	{
+		dismissed = YES;
+	}
+}
+- (void)handleException:(NSException *)exception
+{
+	UIAlertView *alert =
+	[[[UIAlertView alloc]
+	  initWithTitle:NSLocalizedString(@"Unhandled exception", nil)
+	  message:[NSString stringWithFormat:NSLocalizedString(
+														   @"You can try to continue but the application may be unstable.\n"
+														   @"%@\n%@", nil),
+			   [exception reason],
+			   [[exception userInfo] objectForKey:UncaughtExceptionHandlerAddressesKey]]
+	  delegate:self
+	  cancelButtonTitle:NSLocalizedString(@"Quit", nil)
+	  otherButtonTitles:NSLocalizedString(@"Continue", nil), nil]
+	 autorelease];
+	[alert show];
+	CFRunLoopRef runLoop = CFRunLoopGetCurrent();
+	CFArrayRef allModes = CFRunLoopCopyAllModes(runLoop);
+	while (!dismissed)
+	{
+		for (NSString *mode in (NSArray *)allModes)
+		{
+			CFRunLoopRunInMode((CFStringRef)mode, 0.001, false);
+		}
+	}
+	CFRelease(allModes);
+	NSSetUncaughtExceptionHandler(NULL);
+	signal(SIGABRT, SIG_DFL);
+	signal(SIGILL, SIG_DFL);
+	signal(SIGSEGV, SIG_DFL);
+	signal(SIGFPE, SIG_DFL);
+	signal(SIGBUS, SIG_DFL);
+	signal(SIGPIPE, SIG_DFL);
+	if ([[exception name] isEqual:UncaughtExceptionHandlerSignalExceptionName])
+	{
+		kill(getpid(), [[[exception userInfo] objectForKey:UncaughtExceptionHandlerSignalKey] intValue]);
+	}
+	else
+	{
+		[exception raise];
+	}
+}
+@end
+NSString* getAppInfo()
+{
+	NSString *appInfo = [NSString stringWithFormat:@"App : %@ %@(%@)\nDevice : %@\nOS Version : %@ %@\nUDID : %@\n",
+						 [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleDisplayName"],
+						 [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"],
+						 [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"],
+						 [UIDevice currentDevice].model,
+						 [UIDevice currentDevice].systemName,
+						 [UIDevice currentDevice].systemVersion,
+						 [UIDevice currentDevice].uniqueIdentifier];
+	NSLog(@"Crash!!!! %@", appInfo);
+	return appInfo;
+}
+void MySignalHandler(int signal)
+{
+	int32_t exceptionCount = OSAtomicIncrement32(&UncaughtExceptionCount);
+	if (exceptionCount > UncaughtExceptionMaximum)
+	{
+		return;
+	}
+	NSMutableDictionary *userInfo =
+	[NSMutableDictionary
+	 dictionaryWithObject:[NSNumber numberWithInt:signal]
+	 forKey:UncaughtExceptionHandlerSignalKey];
+	NSArray *callStack = [UncaughtExceptionHandler backtrace];
+	[userInfo
+	 setObject:callStack
+	 forKey:UncaughtExceptionHandlerAddressesKey];
+	[[[[UncaughtExceptionHandler alloc] init] autorelease]
+	 performSelectorOnMainThread:@selector(handleException:)
+	 withObject:
+	 [NSException
+	  exceptionWithName:UncaughtExceptionHandlerSignalExceptionName
+	  reason:
+	  [NSString stringWithFormat:
+	   NSLocalizedString(@"Signal %d was raised.\n"
+						 @"%@", nil),
+	   signal, getAppInfo()]
+	  userInfo:
+	  [NSDictionary
+	   dictionaryWithObject:[NSNumber numberWithInt:signal]
+	   forKey:UncaughtExceptionHandlerSignalKey]]
+	 waitUntilDone:YES];
+}
+void InstallUncaughtExceptionHandler()
+{
+	signal(SIGABRT, MySignalHandler);
+	signal(SIGILL, MySignalHandler);
+	signal(SIGSEGV, MySignalHandler);
+	signal(SIGFPE, MySignalHandler);
+	signal(SIGBUS, MySignalHandler);
+	signal(SIGPIPE, MySignalHandler);
+}
+ */
+
+//**********************************捕捉异常end***************************************//
+
+
+
+
+
 
 //缩略图上绘制点的图层
 //使用方法：设置x、y坐标，更新绘制图层
@@ -424,7 +624,9 @@ UIImage *lateast_image;
 Vector3f lateast_P;
 Matrix3f lateast_R;
 bool vins_updated = false;
-
+//wrz
+static int fre_count=0;
+cv::Mat imagePre;
 //主要负责对采集到的原始图像进行角点检测跟踪，显示等
 - (void)processImage:(cv::Mat&)image
 {
@@ -447,19 +649,47 @@ bool vins_updated = false;
         double* time_now_decode = (double*)Group;
         double time_stamp = *time_now_decode;
 		
-		//control image process frequency
-		static int fre_count=0;
-		if(fre_count!=2){
-			fre_count++;
-			cv::Mat tmp;
-			cv::flip(image,tmp,-1);
-			image = tmp;
-			cv::cvtColor(image, image, CV_RGBA2BGR);
-			return;
+		//wrz control image process frequency
+		if(start_record){
+		//if(true){
+			if(fre_count!=2){
+				fre_count++;
+				//如何不显示image？
+				if(vins.solver_flag!=VINS::INITIAL){
+					imagePre.copyTo(image);
+					
+				}
+				else{
+					cv::Mat tmp;
+					cv::flip(image,tmp,-1);
+					image = tmp;
+					cv::cvtColor(image, image, CV_RGBA2BGR);
+				}
+				//			if(vins.solver_flag==VINS::INITIAL){
+				//				cv::Mat tmp;
+				//				cv::flip(image,tmp,-1);
+				//				image = tmp;
+				//				cv::cvtColor(image, image, CV_RGBA2BGR);
+				//			}
+				return;
+			}
+			else{
+				fre_count=0;
+			}
+
 		}
-		else{
-			fre_count=0;
-		}
+//		else if(start_playback){
+//			if(fre_count!=2){
+//				fre_count++;
+//				//如何不显示image？
+//				imagePre.copyTo(image);
+//				return;
+//			}
+//			else{
+//				fre_count=0;
+//			}
+//
+//		}
 		//wrz debug
 		static int countTmp=0;
 		static double timeFirst=time_stamp;
@@ -495,24 +725,38 @@ bool vins_updated = false;
 		//回放存储的图像数据
         if(start_playback)
         {
-            //TS(readImg);
-            bool still_play;
-            still_play = [self readImageTime:imageDataReadIndex];
-            [self readImage:imageDataReadIndex];
-            if(!still_play)
-                return;
-            imageDataReadIndex++;
-			vins.playbackImageIndex=imageDataReadIndex;
+			//if(1){
+			if(fre_count==0){
+				if(!oldImageDataCleared){
+					while(!img_msg_buf.empty())img_msg_buf.pop();
+					oldImageDataCleared=true;
+				}
+				//TS(readImg);
+				bool still_play;
+				still_play = [self readImageTime:imageDataReadIndex];
+				[self readImage:imageDataReadIndex];
+				if(!still_play)
+					return;
+				imageDataReadIndex++;
+				vins.playbackImageIndex=imageDataReadIndex;
 #ifdef DATA_EXPORT
-            [self tapSaveImageToIphone:imgData.image];
+				[self tapSaveImageToIphone:imgData.image];
 #endif
-            UIImageToMat(imgData.image,image);
-            UIImageToMat(imgData.image,input_frame);
-            img_msg->header = imgData.header;
-            //TE(readImg);
+				UIImageToMat(imgData.image,image);
+				UIImageToMat(imgData.image,input_frame);
+				img_msg->header = imgData.header;
+				printf("wrz12 record play image: %lf %d imgBuf:%d\n",imgData.header,imageDataReadIndex,img_msg_buf.size());
+				//TE(readImg);
 #ifdef DATA_EXPORT
-            printf("record play image: %lf\n",imgData.header,imageDataReadIndex);
+				printf("wrz12 record play image2  %lf %d\n",imgData.header,imageDataReadIndex);
 #endif
+			}
+			else{
+				fre_count=(fre_count+1)%3;
+				return;
+			}
+			
+			
         }
         else
         {
@@ -525,7 +769,10 @@ bool vins_updated = false;
             imgData.image = MatToUIImage(image);
             imgDataBuf.push(imgData);
 			imageDataInputIndex++;
-            return;
+			//wrz
+			image.copyTo(imagePre);
+			if(vins.solver_flag!=VINS::INITIAL)
+				return;
         }
         else
         {
@@ -576,6 +823,8 @@ bool vins_updated = false;
             //img_msg callback
             m_buf.lock();
             img_msg_buf.push(img_msg);
+			//printf("wrz12 record play image: push to buf\n");
+			
             is_calculate = true;
             //NSLog(@"Img timestamp %lf",img_msg_buf.front()->header);
             m_buf.unlock();
@@ -605,8 +854,12 @@ bool vins_updated = false;
                 i_buf.lock();
                 cv::Mat loop_image = gray.clone();
                 image_buf_loop.push(make_pair(loop_image, img_msg->header));
-                if(image_buf_loop.size() > WINDOW_SIZE)
-                    image_buf_loop.pop();
+				printf("wrz16 i:image_buf header:%f img_header:%f, size:%d\n",image_buf_loop.front().second, img_msg->header,image_buf_loop.size());
+//                if(image_buf_loop.size() > 50*WINDOW_SIZE)
+//                    image_buf_loop.pop();
+				if((image_buf_loop.front().second + 2.0< vins.Headers[WINDOW_SIZE - 2]) || (image_buf_loop.front().second-vins.Headers[WINDOW_SIZE - 2]>100.0)){
+					image_buf_loop.pop();
+				}
                 i_buf.unlock();
             }
         }
@@ -711,6 +964,8 @@ bool vins_updated = false;
                         cv::cvtColor(image, image, CV_RGBA2BGR);
                 }
             }
+			//wrz
+			image.copyTo(imagePre);
 #endif
         }
         else //show VINS
@@ -721,6 +976,7 @@ bool vins_updated = false;
             {
                 vins.drawresult.pose.clear();
                 vins.drawresult.pose = keyframe_database.refine_path;
+				printf("wrz16 refine_path size:%d\n",(vins.drawresult.pose).size());
                 vins.drawresult.segment_indexs = keyframe_database.segment_indexs;
                 //vins.drawresult.Reprojection(vins.image_show, vins.correct_point_cloud, vins.correct_Rs, vins.correct_Ps, box_in_trajectory);
 				vins.drawresult.ReprojectionWithMap(vins.image_show, vins.correct_point_cloud, vins.mapData.mapPoints, vins.correct_Rs, vins.correct_Ps, box_in_trajectory);
@@ -746,6 +1002,8 @@ bool vins_updated = false;
             cv::flip(image,tmp2,1);
             if (isNeedRotation)
                 image = tmp2.t();
+			//wrz
+			image.copyTo(imagePre);
         }
         
         TE(visualize);
@@ -774,8 +1032,11 @@ getMeasurements()
     while (true)
     {
 		//如果没有Imu或image数据，直接返回
-		if (imu_msg_buf.empty() || img_msg_buf.empty())
-            return measurements;
+		if (imu_msg_buf.empty() || img_msg_buf.empty()){
+			NSLog(@"wrz14 all empty");
+			return measurements;
+		}
+		printf("wrz14 buf header img:%f, imu:%f\n",img_msg_buf.front()->header,imu_msg_buf.front()->header);
         //如果imu_msg_buf最后一个数据早于img_msg_buf第一个数据，直接返回等待直至imu数据出现在img_msg_buf第一个数据后
         if (!(imu_msg_buf.back()->header > img_msg_buf.front()->header))
         {
@@ -801,6 +1062,7 @@ getMeasurements()
         }
         //NSLog(@"IMU_buf = %d",IMUs.size());
         measurements.emplace_back(IMUs, img_msg);
+		NSLog(@"add measurements");
     }
     return measurements;
 }
@@ -873,6 +1135,8 @@ bool start_global_optimization = false;
              });
     lk.unlock();
     waiting_lists = measurements.size();
+	
+	printf("wrz16 i:waiting_lists:%d lastMear imu header:%f imageHeader:%f img_msg_buf_header:%f\n",waiting_lists,measurements.back().first.back()->header,measurements.back().second->header,img_msg_buf.back()->header);
 	//对每对数据进行处理，即当前帧image和帧间的imu数据
     for(auto &measurement : measurements)
     {
@@ -916,7 +1180,7 @@ bool start_global_optimization = false;
             }
             else if(vins.failure_occur == true)
             {
-				//显示？
+				//显示？重新初始化？
 				vins.drawresult.change_color = true;
                 vins.drawresult.indexs.push_back(vins.drawresult.pose.size());
                 segmentation_index++;
@@ -950,12 +1214,21 @@ bool start_global_optimization = false;
                     i_buf.lock();
                     while(!image_buf_loop.empty() && image_buf_loop.front().second < vins.Headers[WINDOW_SIZE - 2])
                     {
-                        image_buf_loop.pop();
+						printf("wrz16 pop img_buf\n");
+						image_buf_loop.pop();
                     }
                     //assert(vins.Headers[WINDOW_SIZE - 2] == image_buf_loop.front().second);
-                    if(vins.Headers[WINDOW_SIZE - 2] == image_buf_loop.front().second)
+					for(int i=0;i<WINDOW_SIZE;++i){
+						if(!image_buf_loop.empty())
+							printf("wrz16 i: %d, image_buf:%f, headers:%f\n",i,image_buf_loop.front().second,vins.Headers[i]);
+						else{
+							printf("wrz16 imgage_buf empty\n");
+						}
+					}
+                    if(!image_buf_loop.empty()&&vins.Headers[WINDOW_SIZE - 2] == image_buf_loop.front().second)
                     {
-                        const char *pattern_file = [[[NSBundle bundleForClass:[self class]] pathForResource:@"brief_pattern" ofType:@"yml"] cStringUsingEncoding:[NSString defaultCStringEncoding]];
+						printf("wrz15 key header:%f\n",vins.Headers[WINDOW_SIZE-2]);
+						const char *pattern_file = [[[NSBundle bundleForClass:[self class]] pathForResource:@"brief_pattern" ofType:@"yml"] cStringUsingEncoding:[NSString defaultCStringEncoding]];
                         KeyFrame* keyframe = new KeyFrame(vins.Headers[WINDOW_SIZE - 2], global_frame_cnt, T_w_i, R_w_i, image_buf_loop.front().first, pattern_file, keyframe_database.cur_seg_index);
                         keyframe->setExtrinsic(vins.tic, vins.ric);
                         /*
@@ -966,11 +1239,20 @@ bool start_global_optimization = false;
                         keyframe->buildKeyFrameFeatures(vins);
 						//在关键帧库内添加关键帧，如果关键帧过多，降采样，并更新关键帧路径显示
                         keyframe_database.add(keyframe);
+						//更新要删除的关键帧的序号
                         erase_index.clear();
                         keyframe_database.resample(erase_index);
                         
                         global_frame_cnt++;
                     }
+					else{
+						if(image_buf_loop.empty()){
+							printf("wrz16 image_buf_loop empty\n");
+						}
+						else{
+							printf("wrz16 not equal\n");
+						}
+					}
                     
                 }
                 else
@@ -1064,11 +1346,14 @@ bool start_global_optimization = false;
         }
         if(!erase_index.empty() && loop_closure != NULL)
             loop_closure->eraseIndex(erase_index);
-        
+        //global_frame_cnt:全部关键帧的数目
         if (loop_check_cnt < global_frame_cnt)
         {
-            KeyFrame* cur_kf = keyframe_database.getLastUncheckKeyframe();
-            assert(loop_check_cnt == cur_kf->global_index);
+			//上一个未检查是否回环的关键帧
+			KeyFrame* cur_kf = keyframe_database.getLastUncheckKeyframe();
+			printf("wrz15 uncheck key header:%f\n",cur_kf->header);
+            //assert(loop_check_cnt == cur_kf->global_index);
+			if(loop_check_cnt != cur_kf->global_index)continue;
             loop_check_cnt++;
             cur_kf->check_loop = 1;
             
@@ -1082,30 +1367,37 @@ bool start_global_optimization = false;
             std::vector<cv::Point2f> measurements_cur_origin = cur_kf->measurements;
             
             bool loop_succ = false;
-            
+			
+			//检测和当前关键帧有回环关系的关键帧
             vector<cv::Point2f> cur_pts;
             vector<cv::Point2f> old_pts;
+			//提取fast特征点并计算描述子，其中cur_kf->measurements直接添在keypoints的后面
             cur_kf->extractBrief(current_image);
             printf("loop extract %d feature\n", cur_kf->keypoints.size());
             loop_succ = loop_closure->startLoopClosure(cur_kf->keypoints, cur_kf->descriptors, cur_pts, old_pts, old_index);
             if(loop_succ)
             {
-                KeyFrame* old_kf = keyframe_database.getKeyframe(old_index);
+				//回环关键帧
+				KeyFrame* old_kf = keyframe_database.getKeyframe(old_index);
                 if (old_kf == NULL)
                 {
                     printf("NO such frame in keyframe_database\n");
-                    assert(false);
+                    //assert(false);
+					continue;
                 }
                 printf("loop succ %d with %drd image\n", process_keyframe_cnt-1, old_index);
-                assert(old_index!=-1);
+                //assert(old_index!=-1);
+				if(old_index==-1)continue;
                 
                 Vector3d T_w_i_old;
                 Matrix3d R_w_i_old;
-                
+                //得到回环关键帧的位姿，并计算与当前关键帧的连接关系
                 old_kf->getOriginPose(T_w_i_old, R_w_i_old);
+				//找到和回环关键帧匹配的特征点，使用最短汉明距离搜索，再用ransanc计算F矩阵并去除outliers；measurements_old和measurements一一对应；measurements_old_norm表示单位深度的特征点
                 cur_kf->findConnectionWithOldFrame(old_kf, cur_pts, old_pts,
                                                    measurements_old, measurements_old_norm);
-                measurements_cur = cur_kf->measurements;
+				//用ransanc计算F矩阵并去除outliers会更新measurements，features_id
+				measurements_cur = cur_kf->measurements;
                 features_id = cur_kf->features_id;
                 
                 if(measurements_old_norm.size()>MIN_LOOP_NUM)
@@ -1126,8 +1418,10 @@ bool start_global_optimization = false;
                     //cout << "old pose " << T_w_i_old.transpose() << endl;
                     //cout << "refinded pose " << T_w_i_refine.transpose() << endl;
                     // add loop edge in current frame
+					//标明当前帧存在回环关键帧old_index
                     cur_kf->detectLoop(old_index);
                     keyframe_database.addLoop(old_index);
+					//标明回环关键帧被回环锁定
                     old_kf->is_looped = 1;
                 }
             }
@@ -1250,7 +1544,7 @@ vector<IMU_MSG> gyro_buf;  // for Interpolation
              imu_msg->acc = cur_acc->acc;
              imu_msg->gyr = gyro_buf[0].gyr + (cur_acc->header - gyro_buf[0].header)*(gyro_buf[1].gyr - gyro_buf[0].gyr)/(gyro_buf[1].header - gyro_buf[0].header);
              //printf("imu gyro update %lf %lf %lf\n", gyro_buf[0].header, imu_msg->header, gyro_buf[1].header);
-             //printf("imu inte update %lf %lf %lf %lf\n", imu_msg->header, gyro_buf[0].gyr.x(), imu_msg->gyr.x(), gyro_buf[1].gyr.x());
+             printf("imu inte update %lf %lf %lf %lf\n", imu_msg->header, gyro_buf[0].gyr.x(), imu_msg->gyr.x(), gyro_buf[1].gyr.x());
          }
 		 //否则认为imu数据不可取，这样岂不如果imu加速度计和陀螺仪时间差异较大则会一直认为数据不可取吗？
          else
@@ -1263,20 +1557,33 @@ vector<IMU_MSG> gyro_buf;  // for Interpolation
 		 //回放存储的imu数据
          if(start_playback)
          {
-             //TS(read_imu_buf);
+			 if(!oldImuDataCleared){
+				 while(!imu_msg_buf.empty())imu_msg_buf.pop();
+				 oldImuDataCleared=true;
+			 }
+			 //TS(read_imu_buf);
              if(imuDataFinished)
                  return;
              [imuReader getBytes:&imuData range: NSMakeRange(imuDataReadIndex * sizeof(imuData), sizeof(imuData))];
              imuDataReadIndex++;
 			 vins.playbackImuIndex=imuDataReadIndex;
+			 printf("wrz12 imu index:%d\n",imuDataReadIndex);
              if(imuData.header == 0)
              {
-                 imuDataFinished = true;
+				 printf("wrz12 head:%f\n",imuData.header);
+				 imuDataFinished = true;
                  return;
              }
+//			 if(imuDataReadIndex>=17270){
+//				 imuDataFinished=true;
+//				 return;
+//			 }
              imu_msg->header = imuData.header;
              imu_msg->acc = imuData.acc;
              imu_msg->gyr = imuData.gyr;
+			 
+			 printf("wrz12 record play imu: %lf %lf %lf %lf %lf %lf %lf %d imuBuf:%d\n",imuData.header,imu_msg->acc.x(), imu_msg->acc.y(), imu_msg->acc.z(),
+					imu_msg->gyr.x(), imu_msg->gyr.y(), imu_msg->gyr.z(),imuDataReadIndex,imu_msg_buf.size());
              //TE(read_imu_buf);
 #ifdef DATA_EXPORT
              printf("record play imu: %lf %lf %lf %lf %lf %lf %lf\n",imuData.header,imu_msg->acc.x(), imu_msg->acc.y(), imu_msg->acc.z(),
@@ -1299,19 +1606,17 @@ vector<IMU_MSG> gyro_buf;  // for Interpolation
          }
 		 else{
 			 if(!imuDataLoaded){
-				 if(imgDataBuf.empty()){
-					TS(record_imu);
-					imuData.header = 0; // as the ending marker
-					imuData.acc << 0,0,0;
-					imuData.gyr << 0,0,0;
-					[imuDataBuf appendBytes:&imuData length:sizeof(imuData)];
-					[self recordImu];
-					 imuDataLoaded=true;
-					TE(record_imu);
-				}
-				else{
-					printf("imgDataBuf not empty\n");
-				}
+				
+				TS(record_imu);
+				imuData.header = 0; // as the ending marker
+				imuData.acc << 0,0,0;
+				imuData.gyr << 0,0,0;
+				[imuDataBuf appendBytes:&imuData length:sizeof(imuData)];
+				[self recordImu];
+				 imuDataLoaded=true;
+				TE(record_imu);
+				 printf("wrz12 add ending marker\n");
+				
 			 }
 		 }
          
@@ -1560,7 +1865,8 @@ vector<IMU_MSG> gyro_buf;  // for Interpolation
 
 -(void)showOutputImage:(UIImage*)image
 {
-    [featureImageView setImage:image];
+	
+	[featureImageView setImage:image];
 }
 
 
@@ -1800,18 +2106,30 @@ bool start_active = true;
 
 //回放存储数据
 - (IBAction)playbackButton:(UIButton *)sender {
-	start_playback = !start_playback;
-	if(start_playback)
+	
+	if(!start_playback)
 	{
-		imageDataReadIndex=0;
-		imuDataReadIndex=0;
+		start_record = false;
+		clearViewControl();
+		[NSThread sleepForTimeInterval:1];
+		start_playback = !start_playback;
 		//TS(read_imu);
 		NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
 		NSString *documentsPath = [paths objectAtIndex:0];
 		NSString *filePath = [documentsPath stringByAppendingPathComponent:@"IMU"]; //Add the file name
-		imuReader = [NSData dataWithContentsOfFile:filePath];
+		if ([[NSFileManager defaultManager] fileExistsAtPath:filePath]){
+			imuReader = [NSData dataWithContentsOfFile:filePath];
+			printf("wrz11 read imu ok!\n");
+		}
+		else{
+			printf("wrz11 read imu failed!\n");
+		}
+		
 		//TE(read_imu);
-		start_record = false;
+		
+	}
+	else{
+		start_playback = !start_playback;
 	}
 	printf("wrz11 playback\n");
 
@@ -1819,6 +2137,15 @@ bool start_active = true;
 
 //存储记录输入数据
 - (IBAction)recordDataButton:(UIButton *)sender {
+	//重新初始化
+//	vins.failure_hand = true;
+//	vins.drawresult.change_color = true;
+//	vins.drawresult.indexs.push_back(vins.drawresult.pose.size());
+//	segmentation_index++;
+//	keyframe_database.max_seg_index++;
+//	keyframe_database.cur_seg_index = keyframe_database.max_seg_index;
+//	[NSThread sleepForTimeInterval:0.5];
+	
 	start_record = !start_record;
 	if(start_record)
 	{

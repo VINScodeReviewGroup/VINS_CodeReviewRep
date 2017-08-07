@@ -120,6 +120,8 @@ public:
     list<pair<int, Eigen::Matrix<double, 8, 1 > > > connection_list;
     Eigen::Matrix<double, 8, 1 > loop_info;
     int segment_index;
+	//wrz
+	vector<pair<int,Vector3f> > frameMapPoints;
     
 private:
     Eigen::Vector3d T_w_i;

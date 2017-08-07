@@ -2291,6 +2291,7 @@ void DrawResult::ReprojectionWithMap(cv::Mat &result, vector<Vector3f> &point_cl
 		//绘画轨迹
 		while(trajectory_color.size() <= segment_indexs[i])
 			trajectory_color.push_back(newColor());
+		printf("wrz16 draw path in vins\n");
 		cv::line(result, pts_pre, pts, trajectory_color[segment_indexs[i]], 2, 8, 0);
 		
 		pts_pre = pts;

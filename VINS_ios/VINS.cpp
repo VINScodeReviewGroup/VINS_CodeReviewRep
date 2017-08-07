@@ -7,10 +7,10 @@
 //
 
 #include "VINS.hpp"
-
+#include "keyfame_database.h"
 bool LOOP_CLOSURE = true;
 
-VINS::VINS()
+VINS::VINS(KeyFrameDatabase* kd)
 :f_manager{Rs},fail_times{0},
 failure_hand{false},
      drawresult{0.0, 0.0, 0.0, 0.0, 0.0, 7.0}
@@ -36,8 +36,9 @@ failure_hand{false},
 	curPosIn2Dmap_pixel.setZero();
 	curPosIn2Dmap_m.setZero();
 	initForwardDirecIn2Dmap.setZero();
-	
+	keyframeDatabaseVins=kd;
 }
+
 
 void VINS::setIMUModel()
 {
@@ -258,7 +259,7 @@ bool VINS::failureDetection()
     //能被跟踪的特征点不能低于4个
     if (f_manager.last_track_num < 4)
     {
-        printf("failure little feature %d\n", f_manager.last_track_num);
+        printf("wrz17 failure little feature %d\n", f_manager.last_track_num);
         is_failure = true;
     }
     /*
@@ -271,20 +272,20 @@ bool VINS::failureDetection()
 	//IMUbias不能大于1
     if (Bgs[WINDOW_SIZE].norm() > 1)
     {
-        printf("failure  big IMU gyr bias estimation %f\n", Bgs[WINDOW_SIZE].norm());
+        printf("wrz17 failure  big IMU gyr bias estimation %f\n", Bgs[WINDOW_SIZE].norm());
         is_failure = true;
     }
 	//和前一帧的位移距离不能大于1m
     Vector3d tmp_P = Ps[WINDOW_SIZE];
     if ((tmp_P - last_P).norm() > 1)
     {
-        printf("failure big translation\n");
+        printf("wrz17 failure big translation\n");
         is_failure = true;
     }
 	//和前一帧高度不能变化太大
     if (abs(tmp_P.z() - last_P.z()) > 0.5)
     {
-        printf("failure  big z translation\n");
+        printf("wrz17 failure  big z translation\n");
         is_failure = true;
     }
 	//和上一帧姿态不能变化太大
@@ -295,7 +296,7 @@ bool VINS::failureDetection()
     delta_angle = acos(delta_Q.w()) * 2.0 / 3.14 * 180.0;
     if (delta_angle > 40)
     {
-        printf("failure  big delta_angle \n");
+        printf("wrz17 failure  big delta_angle \n");
         is_failure = true;
     }
 	
@@ -303,7 +304,7 @@ bool VINS::failureDetection()
     {
         failure_hand = false;
         is_failure = true;
-        printf("failure by hand!\n");
+        printf("wrz17 failure by hand!\n");
     }
     
     return is_failure;
@@ -416,6 +417,34 @@ void VINS::update_loop_correction()
 	
 }
 
+void VINS::updateVinsMap(){
+	//只有滑窗移动才更新地图，先找到对应的关键帧
+	if(solver_flag!=INITIAL&&marginalization_flag==MARGIN_OLD){
+		KeyFrame* curKey;
+		if(keyframeDatabaseVins->size()>0){
+			curKey=keyframeDatabaseVins->getLastKeyframe();
+			//	if(curKey->header==Headers[frame_count-2]
+			int curKeyCnt=WINDOW_SIZE-1;
+			for(int i=0;i<frame_count;++i){
+				if(Headers[i]==curKey->header){
+					curKeyCnt=i;
+					printf("wrz15 i:%d curKey head:%f, headers:%f\n",curKeyCnt,curKey->header,Headers[i]);
+					break;
+				}
+			}
+			for(auto &it_per_id:f_manager.feature){
+				it_per_id.used_num = it_per_id.feature_per_frame.size();
+				if (!(it_per_id.used_num >= 3 && it_per_id.start_frame < curKeyCnt))
+					continue;
+				if(it_per_id.solve_flag!=1)
+					continue;
+			}
+			
+			
+		}
+		
+	}
+}
 void VINS::processIMU(double dt, const Vector3d &linear_acceleration, const Vector3d &angular_velocity)
 {
     if (!first_imu)
@@ -481,6 +510,7 @@ void VINS::processImage(map<int, Vector3d> &image_msg, double header, int buf_nu
 	printf("wrz10 number of all points: %d, curPoints: %d\n",f_manager.erasedFeatureNum+correct_point_cloud.size(),correct_point_cloud.size());
 	
     Headers[frame_count] = header;
+	printf("wrz16 i: processImage header:%f\n",header);
 
     if(solver_flag == INITIAL)
     {
@@ -507,9 +537,19 @@ void VINS::processImage(map<int, Vector3d> &image_msg, double header, int buf_nu
             if(result)
             {
                 solve_ceres(buf_num);
-                if(final_cost > 200)  //initialization failed, need reinitialize
+				int costThres=0;
+				
+				if(succ_times>0){
+					costThres=500;
+				}
+				else{
+					costThres=30;
+				}
+				printf("wrz17 succ time:%d costThre:%d\n",succ_times,costThres);
+                //if(final_cost > solveInitialFinalCostThres)  //initialization failed, need reinitialize
+				if(final_cost>costThres)
                 {
-                    printf("final cost %lf faild!\n",final_cost);
+                    printf("wrz17 final cost %lf initial faild!\n",final_cost);
                     delete last_marginalization_info;
                     last_marginalization_info = nullptr;
                     solver_flag = INITIAL;
@@ -520,12 +560,13 @@ void VINS::processImage(map<int, Vector3d> &image_msg, double header, int buf_nu
                 }
                 else
                 {
-                    printf("final cost %lf succ!\n",final_cost);
+                    printf("wrz17 final cost %lf initial succ!\n",final_cost);
                     failure_occur = 0;
                     //update init progress
                     initProgress = 100;
                     init_status = SUCC;
                     fail_times = 0;
+					succ_times++;
                     printf("Initialization finish---------------------------------------------------!\n");
                     solver_flag = NON_LINEAR;
                     slideWindow();
@@ -553,6 +594,7 @@ void VINS::processImage(map<int, Vector3d> &image_msg, double header, int buf_nu
         bool is_nonlinear = true;
         f_manager.triangulate(Ps, tic, ric, is_nonlinear);
         solve_ceres(buf_num);
+		printf("wrz17 final cost %lf track!\n",final_cost);
         failure_occur = 0;
         
         if (failureDetection())
@@ -1104,7 +1146,7 @@ bool VINS::solveInitial()
     for (int i = 0; frame_it != all_image_frame.end( ); frame_it++)
     {
         // provide initial guess
-		//没太懂？除了关键帧外其他的帧进行Pnp位姿结算优化
+		//除了关键帧外其他的帧进行Pnp位姿结算优化
         cv::Mat r, rvec, t, D, tmp_r;
         if((frame_it->first) == Headers[i])
         {
@@ -1156,12 +1198,12 @@ bool VINS::solveInitial()
 		//Pnp要求点对不少于6对
         if(pts_3_vector.size() < 6 )
         {
-            printf("init Not enough points for solve pnp !\n");
+            printf("wrz17 init Not enough points for solve pnp !\n");
             return false;
         }
         if (!cv::solvePnP(pts_3_vector, pts_2_vector, K, D, rvec, t, 1))
         {
-            printf("init solve pnp fail!\n");
+            printf("wrz17 init solve pnp fail!\n");
             init_status = FAIL_PNP;
             fail_times++;
             return false;
@@ -1288,7 +1330,7 @@ bool VINS::visualInitialAlign()
         init_poses.push_back(Ps[i]);
 		double yawInit=Utility::R2ypr(Rs[i]).x();
 		printf("wrz08 yawInit:%f\n",yawInit);
-		if(abs(yawInit)>10.0)return false;
+		//if(abs(yawInit)>10.0)return false;
 //		if(i==frame_count){
 //			if(abs(yawInit)>2.0){
 //				return false;
@@ -1307,7 +1349,8 @@ bool VINS::relativePose(int camera_id, Matrix3d &relative_R, Vector3d &relative_
 		//得到第i帧和第WINDOW_SIZE帧之间的匹配点对
         corres = f_manager.getCorresponding(i, WINDOW_SIZE);
 		//匹配点对必须大于20对
-        if (corres.size() > 20)
+		//wrz
+        if (corres.size() > relativePoseCorresSize)
         {
             double sum_parallax = 0;
             double average_parallax;
@@ -1322,7 +1365,7 @@ bool VINS::relativePose(int camera_id, Matrix3d &relative_R, Vector3d &relative_
             }
             average_parallax = 1.0 * sum_parallax / int(corres.size());
             parallax_num_view = average_parallax * 520;
-            if(average_parallax * 520 < 30)
+            if(average_parallax * 520 < relativePoseAverage_parallaxThres)
             {
                 init_status = FAIL_PARALLAX;
                 fail_times++;

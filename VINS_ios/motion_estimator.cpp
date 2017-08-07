@@ -5,8 +5,9 @@
 //  Created by HKUST Aerial Robotics on 2016/12/26.
 //  Copyright © 2017 HKUST Aerial Robotics. All rights reserved.
 //
-
+#include "global_param.hpp"
 #include "motion_estimator.hpp"
+
 /*
 namespace cv {
     void decomposeEssentialMat( InputArray _E, OutputArray _R1, OutputArray _R2, OutputArray _t )
@@ -228,7 +229,7 @@ bool MotionEstimator::solveRelativeRT(const vector<pair<Vector3d, Vector3d>> &co
         cout << "init solve5: " << ypr.transpose() << endl;
         Rotation = R.transpose();
         Translation = -R.transpose() * T;
-        if(inlier_cnt > 10)
+        if(inlier_cnt > solveRelativeRTInlierCntThres)
             return true;
         else
             return false;

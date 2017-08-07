@@ -65,7 +65,8 @@ void KeyFrame::extractBrief(cv::Mat &image)
     int start = keypoints.size() - measurements.size();
     for(int i = 0; i< measurements.size(); i++)
     {
-        window_keypoints.push_back(keypoints[start + i]);
+		//window_keypoints即为measurements
+		window_keypoints.push_back(keypoints[start + i]);
         window_descriptors.push_back(descriptors[start + i]);
     }
 }
@@ -124,7 +125,7 @@ double round(double r)
 {  
     return (r > 0.0) ? floor(r + 0.5) : ceil(r - 0.5);  
 } 
-
+//建立关键帧，包括该关键帧的点云，观测值
 void KeyFrame::buildKeyFrameFeatures(VINS &vins)
 {
     for (auto &it_per_id : vins.f_manager.feature)
@@ -166,6 +167,7 @@ void KeyFrame::searchByDes(std::vector<cv::Point2f> &measurements_old,
     printf("loop_match before cur %d %d, old %d\n", window_descriptors.size(), measurements.size(), descriptors_old.size());
     std::vector<int> dis_cur_old;
     std::vector<uchar> status;
+	//window_descriptors和measurements一一对应的，在回环关键帧内找到和当前帧的特征点对应的点
     for(int i = 0; i < window_descriptors.size(); i++)
     {
         int bestDist = 256;
@@ -185,6 +187,7 @@ void KeyFrame::searchByDes(std::vector<cv::Point2f> &measurements_old,
             dis_cur_old.push_back(bestDist);
         }
     }
+	//ransanc计算F矩阵并去除outliers
     rejectWithF(measurements_old, measurements_old_norm);
     printf("loop_match after cur %d %d, old %d\n", window_descriptors.size(), measurements.size(), descriptors_old.size());
 }
@@ -268,7 +271,8 @@ bool KeyFrame::findConnectionWithOldFrame(const KeyFrame* old_kf,
                                           const std::vector<cv::Point2f> &cur_pts, const std::vector<cv::Point2f> &old_pts,
                                           std::vector<cv::Point2f> &measurements_old, std::vector<cv::Point2f> &measurements_old_norm)
 {
-    searchByDes(measurements_old, measurements_old_norm, old_kf->descriptors, old_kf->keypoints);
+	//找到和回环关键帧匹配的特征点，measurements_old和measurements一一对应；measurements_old_norm表示单位深度的特征点
+	searchByDes(measurements_old, measurements_old_norm, old_kf->descriptors, old_kf->keypoints);
     return true;
 }
 

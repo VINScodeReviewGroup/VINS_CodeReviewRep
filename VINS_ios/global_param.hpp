@@ -43,11 +43,23 @@ enum DeviceType
 #define GYR_W ((double)4.0e-5)
 #define BIAS_ACC_THRESHOLD ((double)0.5)
 #define BIAS_GYR_THRESHOLD ((double)0.1)
-#define G_THRESHOLD ((double)3.0)
+
 #define G_NORM ((double)9.805)
 #define INIT_KF_THRESHOLD ((double)18)
 #define SFM_R_THRESHOLD ((double)180)
 #define MAX_FEATURE_CNT 150
+
+//wrz some tuning parameters
+#define relativePoseCorresSize 15
+#define relativePoseAverage_parallaxThres 25 //fail_para
+#define solveRelativeRTInlierCntThres 15 //fail_relative
+#define solveFrameByPnPptsSizeThres 10 //fail_sfm
+#define constructFinalCostThres (5e-03) //fail_sfm
+#define solveInitialFinalCostThres 250 //fail_check
+#define G_THRESHOLD ((double)2.0) //fail_align
+#define MAX_CNT 100 //feature detection，一帧图像特征点最大数目
+#define MIN_DIST 30 //feature detection，角点之间的最小距离
+
 
 extern double FOCUS_LENGTH_Y;
 extern double PY;
