@@ -543,7 +543,7 @@ void VINS::processImage(map<int, Vector3d> &image_msg, double header, int buf_nu
 					costThres=500;
 				}
 				else{
-					costThres=30;
+					costThres=80;
 				}
 				printf("wrz17 succ time:%d costThre:%d\n",succ_times,costThres);
                 //if(final_cost > solveInitialFinalCostThres)  //initialization failed, need reinitialize

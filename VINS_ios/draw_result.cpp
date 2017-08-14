@@ -48,6 +48,9 @@ DrawResult::DrawResult(float _pitch, float _roll, float _yaw, float _Tx, float _
 	tagIndex=0;
 	hasSetPath=false;
 	displayMap=false;
+	singleLineBlockNum=20;
+	singleArrowNum=5;
+	
 }
 bool checkBorder(const cv::Point2f &pt)
 {
@@ -740,14 +743,113 @@ void DrawResult::drawAnyArrow(cv::Mat &result, Vector3f corner_0, Vector3f corne
 		plain[0][1] = p[1+6*i];
 		plain[0][2] = p[4+6*i];
 		plain[0][3] = p[5+6*i];
-		cv::fillPoly(result, ppt, npts, 1, cv::Scalar(0, 200, 0));
+		cv::fillPoly(result, ppt, npts, 1, cv::Scalar(255, 0, 0));//155, 48, 255
 		
 		plain[0][0] = p[1+6*i];
 		plain[0][1] = p[2+6*i];
 		plain[0][2] = p[3+6*i];
 		plain[0][3] = p[4+6*i];
-		cv::fillPoly(result, ppt, npts, 1, cv::Scalar(0, 200, 0));
+		cv::fillPoly(result, ppt, npts, 1, cv::Scalar(255, 0, 0));
 	}
+	
+}
+
+void DrawResult::drawPathLineOnGround(cv::Mat &result, Vector3f start, Vector3f end, Vector3f normal, int lineNum, Vector3f P_latest, Matrix3f R_latest, bool inAR){
+	Eigen::Matrix3f RIC;
+	RIC = Utility::ypr2R(Vector3d(RIC_y,RIC_p,RIC_r)).cast<float>();
+	
+	cv::Mat aa(WIDTH,HEIGHT,CV_8UC4,Scalar(0,0,0,125));
+	//线条宽度
+	float lineWidth=0.25;
+	vector<Vector3f> lineCorners;
+	//单个线条长度
+	float lineLength=(end-start).norm();
+	float singleLineLen=lineLength/lineNum;
+	Vector3f lineDirec=(end-start)/lineLength;
+	//第一个线条
+	Vector3f leftRightDirec=(end-start).cross(normal);
+	leftRightDirec=leftRightDirec/leftRightDirec.norm();
+	Vector3f corner1=start+leftRightDirec*lineWidth/2.0;
+	Vector3f corner2=corner1+singleLineLen*lineDirec;
+	Vector3f corner3=corner2-leftRightDirec*lineWidth;
+	Vector3f corner4=corner3-singleLineLen*lineDirec;
+	lineCorners.push_back(corner1);
+	lineCorners.push_back(corner2);
+	lineCorners.push_back(corner3);
+	lineCorners.push_back(corner4);
+	//其余线条
+	Vector3f corner1i=corner1;
+	Vector3f corner2i=corner2;
+	Vector3f corner3i=corner3;
+	Vector3f corner4i=corner4;
+	
+	for(int i=1;i<lineNum;++i){
+		corner1i=corner1i+singleLineLen*lineDirec;
+		corner2i=corner2i+singleLineLen*lineDirec;
+		corner3i=corner3i+singleLineLen*lineDirec;
+		corner4i=corner4i+singleLineLen*lineDirec;
+		lineCorners.push_back(corner1i);
+		lineCorners.push_back(corner2i);
+		lineCorners.push_back(corner3i);
+		lineCorners.push_back(corner4i);
+	}
+	
+	//计算路线在图像投影的位置
+	vector<cv::Point2f> lineImage;
+	Eigen::Vector3f Pc;
+	vector<float> depth_of_corner;
+	for(auto it : lineCorners)
+	{
+		if (inAR)
+			Pc = (R_latest * RIC).transpose()* (it - 1.0*P_latest  - R_latest * Vector3f(0,0.043,0));
+		else
+			Pc = R_latest.transpose() * (it - origin_w - P_latest);
+		
+//		if(Pc.z()<0)
+//			return;
+		
+		cv::Point2f pts;
+		if (inAR)
+		{
+			pts.x = FOCUS_LENGTH_X * Pc.x() / Pc.z()+ 240;
+			pts.y = FOCUS_LENGTH_Y * Pc.y() / Pc.z()+ 320;
+		}
+		else{
+			pts.x = Fx * Pc.x() / Pc.z()+ Y0;
+			pts.y = Fy * Pc.y() / Pc.z()+ X0;
+		}
+		depth_of_corner.push_back(Pc.z());
+		lineImage.push_back(pts);
+	}
+//	if(Pc.z()<0)
+//		return;
+	cv::Point* p=new cv::Point[4*lineNum];
+	for(int i=0;i<4*lineNum;i++){
+		p[i]=lineImage[i];
+	}
+	//绘制所有分块路线
+	int npts[1]={4};
+	cv::Point plain[1][4];
+	const cv::Point* ppt[1]={plain[0]};
+	for(int i=0;i<lineNum;++i){
+		if(depth_of_corner[i*4+0]<0.1)continue;
+		if(depth_of_corner[i*4+1]<0.1)continue;
+		if(depth_of_corner[i*4+2]<0.1)continue;
+		if(depth_of_corner[i*4+3]<0.1)continue;
+		plain[0][0]=p[i*4+0];
+		plain[0][1]=p[i*4+1];
+		plain[0][2]=p[i*4+2];
+		plain[0][3]=p[i*4+3];
+		cv::fillPoly(result, ppt, npts, 1, cv::Scalar(127,255,0,125));
+	}
+	
+//	cv::Mat mask;
+//	cv::cvtColor(aa,mask,CV_BGRA2GRAY);
+//	printf("wrz18 aa:%d, aa_ch:%d, result:%d, result_ch:%d\n",aa.type(),aa.channels(), result.type(), result.channels());
+//	cv::cvtColor(result, result, CV_BGR2BGRA);
+//	aa.copyTo(result,mask);
+//	cv::cvtColor(result, result, CV_BGRA2BGR);
+	
 	
 }
 
@@ -1746,6 +1848,196 @@ void DrawResult::drawArrowFllowedByPath(cv:: Mat &equ_image, cv::Mat &result, ve
 	
 }
 
+void DrawResult::drawArrowHoverring(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update, vector<Vector3f>& vinsPaths){
+	
+		cv::Mat aa(HEIGHT,WIDTH,CV_8UC3,Scalar(0,0,0));
+		result = aa;
+		Eigen::Matrix3f RIC;
+		RIC = Utility::ypr2R(Vector3d(RIC_y,RIC_p,RIC_r)).cast<float>();
+		
+		//计算透镜到像平面方向与惯性系中的z方向的夹角，夹角小于60度，则认为相机朝下俯视;相机坐标系为：像平面左下角为原点，朝右为x轴，朝上为y轴，朝后为z轴，满足右手法则
+		Vector3f cam_z(0, 0, -1);
+		Vector3f w_cam_z = R_latest * RIC * cam_z;
+		if (acos(w_cam_z.dot(Vector3f(0, 0, 1))) * 180.0 / M_PI < 60)
+		{
+			printf("look down\n");
+			look_down = true;
+		}
+		else
+		{
+			printf("not down\n");
+			look_down = false;
+		}
+		
+		Vector3f groundPlanePoint;
+		vector<Vector3f> point_inlier;
+		groundPlanePoint = findGround(point_cloud, point_inlier);
+		printf("Ground inlier size %d\n", int(point_inlier.size()) );
+		
+		
+		///draw ground area
+		//gound点集数目必须大于28才绘制地面网格
+		if (point_inlier.size()>28)
+			drawGround(result, point_inlier, P_latest, R_latest);
+	
+		//根据目标路径更新arrow位置
+		if(pathDestNum>0){
+			if(arrowBasePointInGround->idx!=-1){
+				float length_diretion;
+				Vector3f plane_normal(arrowBasePointInGround->initPlane[0], arrowBasePointInGround->initPlane[1], arrowBasePointInGround->initPlane[2]);
+				groundNormal=plane_normal;
+				
+				for(int i=0;i<vinsPaths.size()-1;++i){
+					//当前目标点和下一个目标点
+					curDest=vinsPaths[i];
+					//curDest=vinsPaths[i]+Vector3f(1,0,0);
+					nextDest=vinsPaths[(i+1)%pathDestNum];
+					//nextDest=curDest+Vector3f(1,-2,0);
+					Vector3f destPoint=curDest;
+					Vector3f nextDestPoint=nextDest;
+					
+					//计算当前目标点和下一目标点在ground平面的投影点
+//					length_diretion=(plane_normal.dot(destPoint) + arrowBasePointInGround->initPlane[3]) / (plane_normal.norm());
+//					destPoint=destPoint-length_diretion*plane_normal/(plane_normal.norm());
+//					printf("wrz18 length curdis:%f\n",length_diretion);
+//					
+//					length_diretion=(plane_normal.dot(nextDestPoint) + arrowBasePointInGroundNext->initPlane[3]) / (plane_normal.norm());
+//					nextDestPoint=nextDestPoint-length_diretion*plane_normal/(plane_normal.norm());
+					
+					//假设地面和XY平面完全平行
+					plane_normal.x()=0;
+					plane_normal.y()=0;
+					plane_normal.z()=1.0;
+					length_diretion=destPoint.z()-arrowBasePointInGround->center.z();
+					printf("wrz18 length curdis:%f\n",length_diretion);
+					destPoint=destPoint-length_diretion*plane_normal;
+					length_diretion=nextDestPoint.z()-arrowBasePointInGround->center.z();
+					nextDestPoint=nextDestPoint-length_diretion*plane_normal;
+					printf("wrz18 length centerX:%f, centerY:%f, centerZ:%f\n",arrowBasePointInGround->center.x(),arrowBasePointInGround->center.y(),arrowBasePointInGround->center.z());
+					
+					curDestOnGround=destPoint;
+					nextDestOnGround=nextDestPoint;
+					//printf("wrz18 length nextdis:%f\n",length_diretion);
+					
+					//计算悬空箭头坐标
+					Vector3f destPointHover;
+					Vector3f nextDestPointHover;
+					//箭头离地面高度
+					float hoverHight=1.5;
+					//保证地面法向量朝上
+					printf("wrz18 curX:%f, curY:%f, curZ:%f, destX:%f, destY:%f, destZ:%f, normX:%f, normY:%f, normZ:%f\n",curDest.x(),curDest.y(),curDest.z(),destPoint.x(),destPoint.y(),destPoint.z(),plane_normal.x(),plane_normal.y(),plane_normal.z());
+					if((curDest-destPoint).dot(plane_normal)<0){
+						plane_normal=-plane_normal;
+						printf("wrz18 normal is down\n");
+						
+					}
+					if(plane_normal.z()<0)plane_normal=-plane_normal;
+					printf("wrz18 normX:%f, normY:%f, normZ:%f\n",plane_normal.x(),plane_normal.y(),plane_normal.z());
+					//悬空箭头坐标
+					destPointHover=destPoint+hoverHight*plane_normal/plane_normal.norm();
+					nextDestPointHover=nextDestPoint+hoverHight*plane_normal/plane_normal.norm();
+					//计算箭头的ori，cox,coy,coz
+					//箭头两边长度
+					float lengthc = 0.15;
+					//箭头前后宽度
+					float singleArrowLen=sqrt(2.0)*lengthc/2;
+					//显示箭头总数目
+					singleArrowNum=6;
+					//显示路线分块个数
+					singleLineBlockNum=20;
+					Vector3f arrowDirection=nextDestPointHover-destPointHover;
+					float arrowMaxLen=arrowDirection.norm();
+					arrowDirection=arrowDirection/arrowMaxLen;
+					Vector3f leftRightDire=(plane_normal/plane_normal.norm()).cross(arrowDirection);
+					leftRightDire=leftRightDire/leftRightDire.norm();
+					Vector3f xDirec=plane_normal/plane_normal.norm()+arrowDirection;
+					xDirec=xDirec/xDirec.norm();
+					Vector3f yDirec=-plane_normal/plane_normal.norm()+arrowDirection;
+					yDirec=yDirec/yDirec.norm();
+					Vector3f zDirec=leftRightDire;
+					Vector3f ori, cox, coy, coz;
+					ori=destPointHover;
+					cox=ori+lengthc*xDirec;
+					coy=ori+lengthc*yDirec;
+					coz=ori+lengthc/10.0*zDirec;
+					
+					arrowBasePointInGround->ori=ori;
+					arrowBasePointInGround->cox=cox;
+					arrowBasePointInGround->coy=coy;
+					arrowBasePointInGround->coz=coz;
+					arrowBasePointInGround->size=lengthc;
+					arrowBasePointInGround->lix=xDirec;
+					arrowBasePointInGround->liy=yDirec;
+					arrowBasePointInGround->liz=zDirec;
+					
+					drawAnyArrow(result, arrowBasePointInGround->ori, arrowBasePointInGround->cox, arrowBasePointInGround->coy, singleArrowNum, P_latest, R_latest, true);
+					drawPathLineOnGround(result, curDestOnGround, nextDestOnGround, plane_normal, singleLineBlockNum, P_latest, R_latest, true);
+					
+					
+				}
+				
+				
+			}
+		}
+		
+		
+		
+		printf("wrz19 hhh, hasInit:%d, tap:%d, inlier:%d,\n",hasInitialPlane,tapFlag,point_inlier.size());
+		//添加新的ground平面或更新ground平面
+		if (!hasInitialPlane and tapFlag and point_inlier.size()>28)
+		{
+			printf("wrz19 hhh in\n");
+			//手触屏幕的位置
+			float xx = 480 - locationTapY -1;
+			float yy = locationTapX;
+			Vector3f Pc;
+			Vector2f box_center_xy, center_input;
+			center_input<< xx, yy;
+			//计算ground点集中心点在投影到图像中的位置
+			Pc = (R_latest * RIC).transpose()* (groundPlanePoint - 1.0*P_latest  - R_latest * Vector3f(0,0.043,0));
+			box_center_xy.x() = FOCUS_LENGTH_X * Pc.x() / Pc.z()+ 240;
+			box_center_xy.y() = FOCUS_LENGTH_Y * Pc.y() / Pc.z()+ 320;
+			
+			
+			//如果手触屏幕位置离ground点集较近，且点集中位于平面内的点数多于上一次的plane，则更新ground平面
+			//if ( (box_center_xy - center_input).norm()<150)
+			if(Pc.z()>0)
+			{
+				
+				if(arrowBasePointInGround->idx==-1){
+					arrowBasePointInGround->idx = 0;
+					arrowBasePointInGround->boxflag = true;
+					arrowBasePointInGround->moveflag = true;
+					arrowBasePointInGround->initPlane = findPlane(point_inlier);
+					arrowBasePointInGround->center = initPoint;
+					
+					arrowBasePointInGroundNext->idx=1;
+					arrowBasePointInGroundNext->boxflag=true;
+					arrowBasePointInGroundNext->moveflag=true;
+					arrowBasePointInGroundNext->initPlane=arrowBasePointInGround->initPlane;
+					arrowBasePointInGroundNext->center = initPoint;
+					
+					hasInitialPlane=true;
+					
+				}
+				else{
+					float inPlanePointRateLast=inPlanePointRate;
+					Vector4f initPlaneTmp=findPlane(point_inlier);
+					if(inPlanePointRateLast<inPlanePointRate){
+						arrowBasePointInGround->initPlane = initPlaneTmp;
+						arrowBasePointInGroundNext->initPlane = initPlaneTmp;
+						printf("inPlanePointRateLast:%f\n",inPlanePointRateLast);
+					}
+				}
+				
+				
+			}
+			tapFlag = false;
+		}
+		if(!hasInitialPlane && tapFlag)tapFlag=false;
+	
+}
+
 void DrawResult::drawArrowFllowedByFixedTag(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update, vector<Vector3f>& vinsPaths){
 	cv::Mat aa(HEIGHT,WIDTH,CV_8UC3,Scalar(0,0,0));
 	result = aa;
@@ -2043,9 +2335,11 @@ void DrawResult::drawBoxVirturCam(cv::Mat &result)
 //            drawBox(result, Grounds[i].ori, Grounds[i].cox, Grounds[i].coy, Grounds[i].coz, Grounds[i].size, camInWorld_T, camInWorld_R, false);
 //        }
 //    }
-	drawAnyArrow(result, arrowBasePointInGround->ori, arrowBasePointInGround->cox, arrowBasePointInGround->coy, arrowNumFirst, camInWorld_T, camInWorld_R, true);
-	//if(curDestIndex<pathDestNum-1)
-	drawAnyArrow(result, arrowBasePointInGroundNext->ori, arrowBasePointInGroundNext->cox, arrowBasePointInGroundNext->coy, arrowNumSecond, camInWorld_T, camInWorld_R, true);
+//	drawAnyArrow(result, arrowBasePointInGround->ori, arrowBasePointInGround->cox, arrowBasePointInGround->coy, arrowNumFirst, camInWorld_T, camInWorld_R, true);
+//	//if(curDestIndex<pathDestNum-1)
+//	drawAnyArrow(result, arrowBasePointInGroundNext->ori, arrowBasePointInGroundNext->cox, arrowBasePointInGroundNext->coy, arrowNumSecond, camInWorld_T, camInWorld_R, true);
+	drawAnyArrow(result, arrowBasePointInGround->ori, arrowBasePointInGround->cox, arrowBasePointInGround->coy, singleArrowNum, camInWorld_T, camInWorld_R, true);
+	drawPathLineOnGround(result, curDestOnGround, nextDestOnGround, groundNormal, singleLineBlockNum, camInWorld_T, camInWorld_R, true);
 }
 
 /*
@@ -2396,7 +2690,8 @@ void DrawResult::ReprojectionWithMap(cv::Mat &result, vector<Vector3f> &point_cl
 	
 	//draw existing boxes
 	//在虚拟相机内绘制箭头等虚拟物体
-	if (box_in_trajectorty){
+	//if (box_in_trajectorty){
+	if(1){
 		drawBoxVirturCam(result);
 		//printf("box_in_trajectory\n");
 	}

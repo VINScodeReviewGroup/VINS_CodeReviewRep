@@ -54,10 +54,10 @@ enum DeviceType
 #define relativePoseAverage_parallaxThres 25 //fail_para
 #define solveRelativeRTInlierCntThres 15 //fail_relative
 #define solveFrameByPnPptsSizeThres 10 //fail_sfm
-#define constructFinalCostThres (5e-03) //fail_sfm
+#define constructFinalCostThres (6e-03) //fail_sfm
 #define solveInitialFinalCostThres 250 //fail_check
-#define G_THRESHOLD ((double)2.0) //fail_align
-#define MAX_CNT 100 //feature detection，一帧图像特征点最大数目
+#define G_THRESHOLD ((double)3.0) //fail_align
+#define MAX_CNT 60 //feature detection，一帧图像特征点最大数目
 #define MIN_DIST 30 //feature detection，角点之间的最小距离
 
 

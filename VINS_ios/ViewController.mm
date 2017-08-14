@@ -603,10 +603,17 @@ void setVinsPath(){
 	if(!vins.drawresult.hasSetPath and vins.drawresult.hasInitialPlane and vins.drawresult.tapFlag){
 		
 		vins.vinsDestPath.push_back(lateast_P);
-		if(vins.vinsDestPath.size()>=4){
+		if(vins.vinsDestPath.size()>=3){
 			vins.drawresult.hasSetPath=true;
 			vins.drawresult.pathDestNum=vins.vinsDestPath.size();
 		}
+		vins.drawresult.tapFlag=false;
+	}
+	else if(vins.drawresult.hasSetPath and vins.drawresult.hasInitialPlane and vins.drawresult.tapFlag){
+		vins.vinsDestPath.clear();
+		vins.drawresult.pathDestNum=0;
+		//vins.vinsDestPath.push_back(lateast_P);
+		vins.drawresult.hasSetPath=false;
 		vins.drawresult.tapFlag=false;
 	}
 }
@@ -678,18 +685,8 @@ cv::Mat imagePre;
 			}
 
 		}
-//		else if(start_playback){
-//			if(fre_count!=2){
-//				fre_count++;
-//				//如何不显示image？
-//				imagePre.copyTo(image);
-//				return;
-//			}
-//			else{
-//				fre_count=0;
-//			}
-//
-//		}
+		
+		
 		//wrz debug
 		static int countTmp=0;
 		static double timeFirst=time_stamp;
@@ -717,7 +714,9 @@ cv::Mat imagePre;
         BOOL isNeedRotation = image.size() != frameSize;
 		
 		//存储时界面更新进度
-		[self performSelectorOnMainThread:@selector(showInputView) withObject:nil waitUntilDone:YES];
+		if(start_playback){
+			[self performSelectorOnMainThread:@selector(showInputView) withObject:nil waitUntilDone:YES];
+		}
 		
 		printf("wrz12 readedImage:%d, storedImage:%d\n",imageDataInputIndex,vins.downloadImageIndex);
         //for save data
@@ -752,9 +751,11 @@ cv::Mat imagePre;
 #endif
 			}
 			else{
+				imagePre.copyTo(image);
 				fre_count=(fre_count+1)%3;
 				return;
 			}
+			fre_count=(fre_count+1)%3;
 			
 			
         }
@@ -823,7 +824,7 @@ cv::Mat imagePre;
             //img_msg callback
             m_buf.lock();
             img_msg_buf.push(img_msg);
-			//printf("wrz12 record play image: push to buf\n");
+			printf("wrz20 record play image: push to buf\n");
 			
             is_calculate = true;
             //NSLog(@"Img timestamp %lf",img_msg_buf.front()->header);
@@ -855,12 +856,18 @@ cv::Mat imagePre;
                 cv::Mat loop_image = gray.clone();
                 image_buf_loop.push(make_pair(loop_image, img_msg->header));
 				printf("wrz16 i:image_buf header:%f img_header:%f, size:%d\n",image_buf_loop.front().second, img_msg->header,image_buf_loop.size());
-//                if(image_buf_loop.size() > 50*WINDOW_SIZE)
-//                    image_buf_loop.pop();
-				if((image_buf_loop.front().second + 2.0< vins.Headers[WINDOW_SIZE - 2]) || (image_buf_loop.front().second-vins.Headers[WINDOW_SIZE - 2]>100.0)){
-					image_buf_loop.pop();
+				//wrz
+				if(start_playback){
+					if((image_buf_loop.front().second + 2.0< vins.Headers[WINDOW_SIZE - 2]) || (image_buf_loop.front().second-vins.Headers[WINDOW_SIZE - 2]>100.0)){
+						image_buf_loop.pop();
+					}
+
 				}
-                i_buf.unlock();
+				else{
+					if(image_buf_loop.size() > WINDOW_SIZE)
+						image_buf_loop.pop();
+				}
+				i_buf.unlock();
             }
         }
         else
@@ -874,7 +881,14 @@ cv::Mat imagePre;
                 //image_pool.push(image_data_cache);
             }
         }
-        featuretracker.img_cnt = (featuretracker.img_cnt + 1) % FREQ;
+		//wrz
+		int FREQTmp=1;
+		if(start_playback){
+			FREQTmp=1;
+		}
+		else FREQTmp=3;
+		
+        featuretracker.img_cnt = (featuretracker.img_cnt + 1) % FREQTmp;
 		//？
         for (int i = 0; i < good_pts.size(); i++)
         {
@@ -936,8 +950,10 @@ cv::Mat imagePre;
 					//vins.drawresult.drawArrowAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
 					//vins.drawresult.drawFixedArrowWithCameraAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
 					//vins.drawresult.drawArrowTowardFixedPointAR(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated);
-					vins.drawresult.drawArrowFllowedByPath(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated,vins.vinsDestPath);
 					//vins.drawresult.drawArrowFllowedByFixedTag(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated,vins.vinsDestPath);
+					//vins.drawresult.drawArrowFllowedByPath(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated,vins.vinsDestPath);
+					
+					vins.drawresult.drawArrowHoverring(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated,vins.vinsDestPath);
 					//wrz
 					setVinsPath();
 					dispPosIn2Dmap();
@@ -965,7 +981,8 @@ cv::Mat imagePre;
                 }
             }
 			//wrz
-			image.copyTo(imagePre);
+			if(start_playback||start_record)
+				image.copyTo(imagePre);
 #endif
         }
         else //show VINS
@@ -980,13 +997,25 @@ cv::Mat imagePre;
                 vins.drawresult.segment_indexs = keyframe_database.segment_indexs;
                 //vins.drawresult.Reprojection(vins.image_show, vins.correct_point_cloud, vins.correct_Rs, vins.correct_Ps, box_in_trajectory);
 				vins.drawresult.ReprojectionWithMap(vins.image_show, vins.correct_point_cloud, vins.mapData.mapPoints, vins.correct_Rs, vins.correct_Ps, box_in_trajectory);
+				//wrz
+				vins.drawresult.drawArrowHoverring(lateast_equa, vins.imageAI, vins.correct_point_cloud, lateast_P, lateast_R, vins_updated,vins.vinsDestPath);
+				setVinsPath();
+				
 				
             }
             cv::Mat tmp2 = vins.image_show;
-            
-            
+            //wrz
+			cv::Mat tmp;
+			cv::cvtColor(image, tmp, CV_RGBA2BGR);
+			cv::Mat mask1;
+			cv::Mat imageAI = vins.imageAI;
+			if(!imageAI.empty())
+				cv::cvtColor(imageAI, mask1, CV_RGB2GRAY);
+			imageAI.copyTo(tmp,mask1);
+			cv::cvtColor(tmp, image, CV_BGR2RGBA);
+			
             cv::Mat down_origin_image;
-            cv::resize(image.t(), down_origin_image, cv::Size(200, 150));
+            cv::resize(image.t(), down_origin_image, cv::Size(250, 192));
             cv::cvtColor(down_origin_image, down_origin_image, CV_BGRA2RGB);
             cv::flip(down_origin_image,down_origin_image,0);
             cv::Mat imageROI;
@@ -1003,7 +1032,8 @@ cv::Mat imagePre;
             if (isNeedRotation)
                 image = tmp2.t();
 			//wrz
-			image.copyTo(imagePre);
+			if(start_playback||start_record)
+				image.copyTo(imagePre);
         }
         
         TE(visualize);
@@ -1202,7 +1232,11 @@ bool start_global_optimization = false;
             if(vins.marginalization_flag == vins.MARGIN_OLD && vins.solver_flag == vins.NON_LINEAR && !image_buf_loop.empty())
             {
                 first_frame = false;
-                if(!first_frame && keyframe_freq % LOOP_FREQ == 0)
+				//wrz
+				int loopFreqTmp=1;
+				if(start_playback)loopFreqTmp=3;
+				else loopFreqTmp=3;//LOOP_FREQ
+                if(!first_frame && keyframe_freq % loopFreqTmp == 0)
                 {
                     keyframe_freq = 0;
                     /**
@@ -2082,7 +2116,15 @@ bool start_active = true;
 {
     if (!ui_main)
     {
-        
+        CGPoint point = [recognizer locationInView:self.view];
+		float pointX=point.x * 640.0 / imageView.frame.size.width;
+		float pointY=point.y * 480.0 / imageView.frame.size.height;
+		if(pointX>40 && pointX<250 && pointY>300 && pointY<450){
+			vins.drawresult.locationTapX=pointX;
+			vins.drawresult.locationTapY=pointY;
+			vins.drawresult.tapFlag=true;
+		}
+		printf("wrz18 pointX:%f, pointY:%f\n",pointX,pointY);
     }
     else{
         
@@ -2273,6 +2315,7 @@ bool start_active = true;
 //			
 //		}
 		vins.vinsDestPath.clear();
+		vins.drawresult.hasInitialPlane=false;
 //		vins.vinsDestPath.push_back(Vector3f(2.51,1.5,0));
 //		vins.vinsDestPath.push_back(Vector3f(2.51,-8.01,0));
 //		vins.vinsDestPath.push_back(Vector3f(9.52,-8.01,0));

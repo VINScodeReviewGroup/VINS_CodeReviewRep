@@ -94,12 +94,18 @@ public:
 	int pathDestNum;
 	Vector3f curDest;
 	Vector3f nextDest;
+	Vector3f curDestOnGround;
+	Vector3f nextDestOnGround;
 	bool hasInitialPlane;
 	int tagIndex;
 	bool hasSetPath;
 	int arrowNumFirst;
 	int arrowNumSecond;
 	bool displayMap;
+	Vector3f groundNormal;
+	int singleLineBlockNum;
+	int singleArrowNum;
+	
 	
 	
     
@@ -146,6 +152,7 @@ public:
 	void drawArrowTowardFixedPointAR(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update);
 	void drawArrowFllowedByPath(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update, vector<Vector3f>& vinsPaths);
 	void drawArrowFllowedByFixedTag(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update, vector<Vector3f>& vinsPaths);
+	void drawArrowHoverring(cv:: Mat &equ_image, cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest, bool vins_update, vector<Vector3f>& vinsPaths);
 
     void drawGround(cv::Mat &result, vector<Vector3f> &point_cloud, Vector3f P_latest, Matrix3f R_latest);
     void drawBox(cv::Mat &result, Vector3f corner_0, Vector3f corner_x, Vector3f corner_y, Vector3f corner_z, float size, Vector3f P_latest, Matrix3f R_latest, bool inAR);
@@ -153,6 +160,10 @@ public:
 	void drawArrow(cv::Mat &result, Vector3f corner_0, Vector3f corner_x, Vector3f corner_y, float size, Vector3f P_latest, Matrix3f R_latest, bool inAR);
 	//wrz draw arrow according to the input num
 	void drawAnyArrow(cv::Mat &result, Vector3f corner_0, Vector3f corner_x, Vector3f corner_y, int singleArrowNum, Vector3f P_latest, Matrix3f R_latest, bool inAR);
+	//wrz draw path line fixed on ground
+	void drawPathLineOnGround(cv::Mat &result, Vector3f start, Vector3f end, Vector3f normal, int lineNum, Vector3f P_latest, Matrix3f R_latest, bool inAR);
+	
+	
 	//wrz
 	void ReprojectionWithMap(cv::Mat &result, vector<Vector3f> &point_cloud, vector<mapPoint>& mapPts, const Matrix3f *R_window,const Vector3f *T_window, bool box_in_trajectorty);
 	
